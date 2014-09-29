@@ -1,0 +1,22 @@
+pentose-phosphate shunt	carbohydrate biosynthetic process	0.4545
+pentose-phosphate shunt	glucose catabolic process	0.9333
+pentose-phosphate shunt	regulation of carbohydrate biosynthetic process	0.3636
+pentose-phosphate shunt	lignin biosynthetic process	0.3077
+glucose catabolic process	glucose catabolic process	1.0000
+glucose catabolic process	carbohydrate biosynthetic process	0.6429
+glucose catabolic process	regulation of carbohydrate biosynthetic process	0.5714
+gluconeogenesis	glucose catabolic process	0.8824
+gluconeogenesis	carbohydrate biosynthetic process	0.7692
+gluconeogenesis	regulation of carbohydrate biosynthetic process	0.6923
+glucose catabolic process	cellulose metabolic process	0.4118
+glucose catabolic process	ubiquitin-dependent protein catabolic process	0.4118
+gluconeogenesis	cellulose metabolic process	0.3750
+gluconeogenesis	ubiquitin-dependent protein catabolic process	0.3125
+glucose catabolic process	lignin biosynthetic process	0.3750
+gluconeogenesis	lignin biosynthetic process	0.5333
+glucose catabolic process	photorespiration	0.2667
+gluconeogenesis	photorespiration	0.4286
+glycolysis	glucose catabolic process	0.9286
+glycolysis	carbohydrate biosynthetic process	0.4000
+glycolysis	regulation of carbohydrate biosynthetic process	0.3000
+glycolysis	photorespiration	0.5455

@@ -1,0 +1,16 @@
+muscle organ development	reproduction	0.2857
+muscle organ development	growth	0.2857
+muscle organ development	locomotion	0.2857
+nematode larval development	locomotion	0.2857
+embryo development ending in birth or egg hatching	locomotion	0.2857
+hermaphrodite genitalia development	locomotion	0.2857
+reproduction	locomotion	0.5000
+reproduction	reproduction	1.0000
+growth	locomotion	0.5000
+growth	growth	1.0000
+actin cytoskeleton organization	locomotion	0.2857
+cytokinesis	locomotion	0.3333
+actin cytoskeleton organization	meiosis	0.4444
+reproduction	meiosis	0.6667
+cytokinesis	meiosis	0.5000
+growth	meiosis	0.3333

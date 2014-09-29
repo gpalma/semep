@@ -1,0 +1,1 @@
+AT2G43770	biological_process	1.0000

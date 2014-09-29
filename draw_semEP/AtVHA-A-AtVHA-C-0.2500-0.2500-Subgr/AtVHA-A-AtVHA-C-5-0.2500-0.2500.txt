@@ -1,0 +1,6 @@
+cell morphogenesis	proteasome core complex assembly	0.3846
+vacuole organization	proteasome core complex assembly	0.3846
+Golgi organization	proteasome core complex assembly	0.3846
+cytoskeleton organization	proteasome core complex assembly	0.3846
+pollen development	cell morphogenesis	0.3000
+glycolysis	cell morphogenesis	0.3000

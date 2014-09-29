@@ -1,0 +1,26 @@
+chloroplast	chloroplast	1.0000
+plant-type vacuole	plant-type vacuole	1.0000
+chloroplast envelope	plant-type vacuole	0.5833
+chloroplast envelope	chloroplast	0.8333
+chloroplast	vacuolar proton-transporting V-type ATPase, V1 domain	0.6364
+plant-type vacuole	vacuolar proton-transporting V-type ATPase, V1 domain	0.7273
+chloroplast envelope	vacuole	0.6364
+chloroplast envelope	Golgi apparatus	0.6364
+chloroplast envelope	vacuolar proton-transporting V-type ATPase, V1 domain	0.5455
+chloroplast envelope	vacuolar membrane	0.5000
+chloroplast envelope	plasma membrane	0.4444
+vacuole	vacuole	1.0000
+vacuole	vacuolar proton-transporting V-type ATPase, V1 domain	0.8000
+Golgi apparatus	Golgi apparatus	1.0000
+Golgi apparatus	vacuolar proton-transporting V-type ATPase, V1 domain	0.7000
+mitochondrion	vacuole	0.8000
+mitochondrion	Golgi apparatus	0.8000
+mitochondrion	plant-type vacuole	0.7273
+mitochondrion	chloroplast	0.7273
+mitochondrion	vacuolar proton-transporting V-type ATPase, V1 domain	0.7000
+mitochondrion	vacuolar membrane	0.6667
+mitochondrion	plasma membrane	0.5000
+vacuolar membrane	vacuolar membrane	1.0000
+vacuolar membrane	vacuolar proton-transporting V-type ATPase, V1 domain	0.7778
+plasma membrane	vacuolar proton-transporting V-type ATPase, V1 domain	0.3750
+plasma membrane	plasma membrane	1.0000

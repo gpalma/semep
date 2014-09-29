@@ -1,0 +1,3 @@
+AT1G23860	mRNA splicing, via spliceosome	1.0000
+AT1G23860	photoperiodism, flowering	1.0000
+AT1G23860	mitotic cell cycle	1.0000

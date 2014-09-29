@@ -1,0 +1,20 @@
+AT1G02840	nuclear speck	1.0000
+AT1G02840	interchromatin granule	1.0000
+AT1G16610	nuclear speck	1.0000
+AT1G10580	nucleus	1.0000
+AT1G10580	CUL4-RING ubiquitin ligase complex	1.0000
+AT3G49430	nucleus	1.0000
+AT3G49430	nucleolus	1.0000
+AT3G49430	cytosol	1.0000
+AT1G16610	nucleoplasm	1.0000
+AT1G16610	nucleolus	1.0000
+AT2G43770	heterotrimeric G-protein complex	1.0000
+AT2G43770	nucleus	1.0000
+AT2G43770	CUL4-RING ubiquitin ligase complex	1.0000
+AT1G02840	nucleus	1.0000
+AT1G23860	nuclear speck	1.0000
+AT1G55310	nuclear speck	1.0000
+AT1G55310	interchromatin granule	1.0000
+AT1G23860	nucleus	1.0000
+AT1G55310	nucleus	1.0000
+AT1G55310	nucleolus	1.0000

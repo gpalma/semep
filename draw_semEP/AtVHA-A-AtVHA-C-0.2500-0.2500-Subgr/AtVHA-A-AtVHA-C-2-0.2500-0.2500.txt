@@ -1,0 +1,1 @@
+response to temperature stimulus	cell growth	0.2857

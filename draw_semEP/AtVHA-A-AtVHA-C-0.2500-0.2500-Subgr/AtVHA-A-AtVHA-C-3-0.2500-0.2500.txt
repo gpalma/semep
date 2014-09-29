@@ -1,0 +1,15 @@
+apoplast	vacuolar membrane	0.2857
+apoplast	plasma membrane	0.3333
+plasmodesma	vacuolar membrane	0.2857
+plasmodesma	plasma membrane	0.3333
+membrane	vacuole	0.2857
+membrane	vacuolar membrane	0.6667
+membrane	Golgi apparatus	0.2857
+membrane	plasma membrane	0.8000
+membrane	vacuolar proton-transporting V-type ATPase, V1 domain	0.4286
+cell wall	vacuole	0.4444
+cell wall	Golgi apparatus	0.4444
+cell wall	plant-type vacuole	0.4000
+cell wall	chloroplast	0.4000
+cell wall	plasma membrane	0.5714
+cell wall	vacuolar proton-transporting V-type ATPase, V1 domain	0.3333

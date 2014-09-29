@@ -1,0 +1,39 @@
+water transport	cell tip growth	0.3000
+proton transport	cell tip growth	0.3000
+water transport	root hair cell differentiation	0.2727
+proton transport	root hair cell differentiation	0.2727
+water transport	unidimensional cell growth	0.3333
+proton transport	unidimensional cell growth	0.3333
+ATP hydrolysis coupled proton transport	root hair cell differentiation	0.3846
+vacuole organization	root hair cell differentiation	0.4545
+Golgi organization	root hair cell differentiation	0.4545
+cytoskeleton organization	root hair cell differentiation	0.4545
+cell morphogenesis	root hair cell differentiation	0.3636
+cell growth	root hair cell differentiation	0.4444
+cell morphogenesis	cell tip growth	0.8000
+water transport	cell morphogenesis	0.4000
+proton transport	cell morphogenesis	0.4000
+ATP hydrolysis coupled proton transport	cell tip growth	0.4167
+cell morphogenesis	unidimensional cell growth	0.8889
+vacuole organization	cell tip growth	0.5000
+Golgi organization	cell tip growth	0.5000
+ATP hydrolysis coupled proton transport	unidimensional cell growth	0.4545
+cytoskeleton organization	cell tip growth	0.5000
+vacuole organization	unidimensional cell growth	0.5556
+Golgi organization	unidimensional cell growth	0.5556
+cytoskeleton organization	unidimensional cell growth	0.5556
+cell growth	cell tip growth	0.7500
+cell morphogenesis	cell morphogenesis	1.0000
+cell growth	unidimensional cell growth	0.8571
+cytoskeleton organization	cell morphogenesis	0.5000
+water transport	vacuole organization	0.4000
+proton transport	vacuole organization	0.4000
+ATP hydrolysis coupled proton transport	ATP hydrolysis coupled proton transport	1.0000
+proton transport	cell growth	0.3750
+cell growth	cell growth	1.0000
+cytoskeleton organization	ATP hydrolysis coupled proton transport	0.5000
+cytoskeleton organization	cell growth	0.6250
+vacuole organization	vacuole organization	1.0000
+cytoskeleton organization	Golgi organization	0.8000
+cytoskeleton organization	vacuole organization	0.8000
+Golgi organization	Golgi organization	1.0000

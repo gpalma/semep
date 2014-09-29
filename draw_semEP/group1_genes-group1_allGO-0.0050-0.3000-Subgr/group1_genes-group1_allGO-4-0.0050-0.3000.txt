@@ -1,0 +1,17 @@
+AT1G16610	sugar mediated signaling pathway	1.0000
+AT3G49430	RNA splicing	1.0000
+AT1G16610	mRNA splicing, via spliceosome	1.0000
+AT1G16610	RNA splicing	1.0000
+AT1G23860	regulation of transcription, DNA-dependent	1.0000
+AT1G23860	RNA processing	1.0000
+AT1G23860	production of siRNA involved in RNA interference	1.0000
+AT1G23860	production of miRNAs involved in gene silencing by miRNA	1.0000
+AT1G23860	post-translational protein modification	1.0000
+AT1G23860	positive regulation of transcription, DNA-dependent	1.0000
+AT1G55310	regulation of transcription, DNA-dependent	1.0000
+AT1G55310	RNA processing	1.0000
+AT1G55310	RNA splicing	1.0000
+AT1G55310	production of siRNA involved in RNA interference	1.0000
+AT1G55310	production of miRNAs involved in gene silencing by miRNA	1.0000
+AT1G55310	post-translational protein modification	1.0000
+AT1G55310	positive regulation of transcription, DNA-dependent	1.0000

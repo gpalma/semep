@@ -1,0 +1,4 @@
+hydrolase activity, acting on acid anhydrides, catalyzing transmembrane movement of substances	hydrolase activity, acting on acid anhydrides, catalyzing transmembrane movement of substances	1.0000
+proton-transporting ATP synthase activity, rotational mechanism	hydrolase activity, acting on acid anhydrides, catalyzing transmembrane movement of substances	0.6667
+proton-transporting ATP synthase activity, rotational mechanism	proton-transporting ATPase activity, rotational mechanism	0.8750
+proton-transporting ATPase activity, rotational mechanism	proton-transporting ATPase activity, rotational mechanism	1.0000

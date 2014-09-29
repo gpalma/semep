@@ -1,0 +1,42 @@
+GENERAL
+=======
+
+get_similarity_stats.py is a  tool for obtain stats of the values of similarity of a set of pairs of terms.
+
+REQUIREMENTS
+============
+Python 2.7
+
+LICENSE
+===========
+GNU GENERAL PUBLIC LICENSE Version 2
+
+USAGE
+=====
+get_similarity_stats.py command synopsis:
+	python get_similarity_stats.py input_filename
+
+where input_filename is file name with the similarity values.
+
+RUNNING SOME SAMPLES
+====================
+
+1) Stats of the similarities of the genes of the group 1 of the SR45 complex
+>python get_similarity_stats.py group1_genes_sim.txt
+
+2) Stats of the similarities of the GO terms of the group 1 of the SR45 complex
+>python get_similarity_stats.py group1_GO_sim.txt
+
+Input File Format
+=================
+The input file format is as follows:
+<<term1>>[TAB]<<term2>>[TAB]<<similarity>>
+
+
+CONTACT
+=======
+Please, let me know any comment, problem or suggestion.
+
+Guillermo Palma
+http://www.ldc.usb.ve/~gpalma
+gvpalma@usb.ve

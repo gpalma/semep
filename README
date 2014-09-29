@@ -1,0 +1,179 @@
+This a source code release of semEP.
+It has been tested on GNU/Linux and OS X.
+
+semEP
+=====
+semEP is a community detection, and
+Link prediction solver.
+
+1) Version
+==========
+1.0.2
+
+2) LICENSE
+===========
+GNU GENERAL PUBLIC LICENSE Version 2
+
+3) CONTENT
+==========
+* Makefile: builds semEP.
+* LICENSE: GPL version 2.
+* src: source code.
+* test: test set.
+** test/gene_annts: Gene families annotated with GO terms.
+** test/go: GO graph and list of terms.
+** test/mab_drugs_annt: twelve anti-neoplastic.
+   agents and monoclonal antibodies drugs annotated with NCIt terms.
+** test/ncit: NCIt graph and list of terms.
+** test/snomed: SNOMED graph and list of terms.
+** test/yamanishi: Link prediction dataset proposed by Yamanishi.
+*  draw_semEP: Visualization tool for semEP output format.
+*  util: stats tools
+
+ 4) REQUIREMENTS
+===============
+* GNU Colecction Compiler (GCC)
+* GNU make (make).
+
+5) INSTALLATION
+===============
+Clean and generate necessary files
+
+   $>make clean
+   $>make
+
+The executable file semEP is generated in the semEP directory
+
+6) USAGE
+========
+semEP has 9 command line options. Four are mandatory.
+Here, mandatory means that without specifying this
+option, the program won't work.
+
+semEP command synopsis:
+      semEP [-e tax|str|ps] [-m] [-p] [-d] [-t threshold A1] [-r threshold A2] [-s threshold BT] <source sim> <descrp> <A1> <A2>
+
+The options in brackets are not mandatory. The following are the command line options:
+
+[-m]	       		# The source of similarity is a similarity matrix.
+[-p]			# Get the links prediction.
+[-d]			# Get the description of the annotations in the output.
+[-t threshold A1]	# Threshold of similarity between the set of annotations 1.
+[-r threshold A2]	# Threshold of similarity between the set of annotations 2
+[-s threshold BT]	# Threshold of similarity between the annotations 1 and 2.
+[-e tax|str|ps]   	# Taxonomic measure to use, where:
+    			"tax" is (1-dtax) measure
+			"str" is  (1 - d^{str}_{tax}) measure
+			"ps" is (1- dps) measure by Viktor Pekar and Steffen Staab
+<source sim>		# File with the source of similarity.
+			It can be a graph or a matrix.
+<descrp> 		# File with the description of the terms of
+			the source of similarity.
+<A1> 			# File with annotations from the first entity.
+<A2>			# File with annotations from the second entity.
+
+The default values of the options are:
+
+-m  	    : "No"
+-p	    : "No"
+-d	    : "No"
+-t	    : 0.25
+-r	    : 0.25
+-s	    : 0.25
+-e  	    : "tax"
+
+7) RUNNING SOME SAMPLES
+=======================
+1) Compute the partitions between two genes using the default values:
+
+$>./semEP test/go/goGraph.txt test/go/go-term-desc.txt test/gene_annts/5-f-atpase/AtVHA-A.txt test/gene_annts/5-f-atpase/AtVHA-C.txt
+
+2) Compute the partitions between two genes using three threshold:
+
+$>./semEP -t 0.5 -r 0.7 -s 0.6 test/go/goGraph.txt test/go/go-term-desc.txt test/gene_annts/5-f-atpase/AtVHA-A.txt test/gene_annts/5-f-atpase/AtVHA-C.txt
+
+3) Compute the partitions between two drugs using a diferents threshold and the measure (1 - d^{str}_{tax}):
+
+$>./semEP -e str -t 0.5 -r 0.6 -s 0.45 test/ncit/graphNCI.txt test/ncit/nci-term-desc.txt test/mab_drugs_annt/Ipilimumab.txt test/mab_drugs_annt/Ofatumumab.txt
+
+4) Compute the partitions between two drugs using a diferents threshold and get predicted links:
+
+$>./semEP -p -t 0.5 -r 0.6 -s 0.45 test/ncit/graphNCI.txt test/ncit/nci-term-desc.txt test/mab_drugs_annt/Catumaxomab.txt test/mab_drugs_annt/Panitumumab.txt
+
+5) Compute the partitions between in a drug-target network and get predicted links on Yamanishi dataset
+
+$>./semEP -m -p -t 0.2 -r 0.3 test/yamanishi/nr/sim_mat/Fold_1_Drugs-Fold_1_Targets.txt test/yamanishi/nr/nr_desc.txt test/yamanishi/nr/folds_drugs/Fold_1_Drugs.txt test/yamanishi/nr/folds_targets/Fold_1_Targets.txt
+
+8) semEP File Formats
+==========================
+The following explains the formats of the files used by semEP.
+
+8.1) Graph File Format
+======================
+The graph of the ontology must be an Direct Acyclic Graph (DAG).
+The vertices of the graph are the identifiers of the terms of the ontology.
+The first line has the following format:
+
+<<number of nodes>>[TAB]<<number of arcs>>
+
+Where <<number of nodes>> is the number of vertice of the graph,
+[TAB] is the tab space, and <<number of arcs>> is the number the arcs
+of the graph. The following lines in the file specify
+a source node, a  target node, and the cost of the arc:
+
+<<source node1>>[TAB]<<target node1 >>[TAB]<<cost1>>
+..
+..
+..
+<<source nodeN>>[TAB]<<target nodeN>>[TAB]<<costN>>
+
+8.2) File format of the description of the terms
+================================================
+We have a file with the IDs of the terms of the ontology and its description
+The file format is as follows:
+
+<<Number of terms>>
+<<Term1>>[TAB]<<Description of the term1>>
+..
+..
+..
+<<TermN>>[TAB]<<Description of the termN>>
+
+Note that the number of terms must be equal to the number of nodes of the graph,
+or the number of rows in the similarity matrix.
+
+8.3) Annotation File Format
+===========================
+The file format is as follows:
+
+<<Number of annotations>>
+<<annotation1>>
+..
+..
+..
+<<annotationN>>
+
+Where <<annotationX>> is the identifier of the annotation in the ontology or
+of the annotation used in the similarity matrix.
+
+8.4) Similarity matrix File Format
+==================================
+Matrix contains the drug-drug similarities, target-target similarities,
+and drug-target values (1 if is a drug-target interaction, 0 otherwise).
+The position in the matrix of  the drug or target is given in the file
+of the description of the terms. The file format is as follows:
+
+<<number of rows and columns>>
+<sim term-1 term-1>[SPC]....[SPC]<sim term-1 term-n>
+..
+..
+<sim term-n term-1>[SPC]....[SPC]<sim term-n term-n>
+
+9) CONTACT
+==========
+I hope you find semEP an useful tool. Please, let me know
+any comment, problem or suggestion.
+
+Guillermo Palma
+http://www.ldc.usb.ve/~gpalma
+gvpalma@usb.ve

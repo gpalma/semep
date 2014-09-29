@@ -1,0 +1,5 @@
+inductive cell migration	inductive cell migration	1.0000
+inductive cell migration	locomotion	0.5714
+inductive cell migration	actin filament-based process	0.4444
+inductive cell migration	cytokinesis, initiation of separation	0.4000
+inductive cell migration	cytokinesis after mitosis	0.3636
