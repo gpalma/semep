@@ -93,7 +93,7 @@ static void print_args(void)
      printf("Threshold E1: %.3f\n", g_args.threshold1);
      printf("Threshold E2: %.3f\n", g_args.threshold2);
      printf("Threshold BT: %.3f\n", g_args.threshold3);
-     printf("Get link prediction: %s\n", g_args.prediction ? "true" : "false");
+     printf("Get predicted links: %s\n", g_args.prediction ? "true" : "false");
      printf("Matrix input: %s\n", g_args.matrix ? "true" : "false");
      printf("Get the description of the annotations: %s\n", g_args.description ? "true" : "false");
      if (g_args.d == DTAX) {
@@ -205,7 +205,7 @@ int main(int argc, char **argv)
 				g_args.threshold1, g_args.threshold2, g_args.threshold3, 
 				name1, name2, in.descriptions,
 				g_args.prediction, g_args.matrix, g_args.d);
-     printf("Semantic Similarity Average of the Partitions: %.4f \n", sim);
+     printf("Average similarity of the partitions: %.4f \n", sim);
      printf("*** semEP Finished ***\n");
      tf = clock();
      printf("\nTotal Time %.3f secs\n", (double)(tf-ti)/CLOCKS_PER_SEC);

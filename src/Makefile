@@ -1,18 +1,16 @@
-CC=		gcc
+CC=		cc
 
-CFLAGS=		-Wall -Wextra -O3 -fomit-frame-pointer -ffast-math -std=gnu99 -march=native -mtune=native
+CFLAGS=		-Wall -Wextra -O3 -ffast-math -std=gnu99 -mtune=native
 DFLAGS=
 
 #CFLAGS=		-Wall -Wextra -O0 -ggdb -std=gnu99
 #DFLAGS=		-DPRGDEBUG
 
 PROG=		semEP
-SOLVER=		util.c types.c graph.c hash_map.c\
-		CA.c metric.c semEP.c input.c main.c
-
-SOLVEROBJS=	$(SOLVER:.c=.o)
-INCLUDES=	-I.
+SOLVER=		util.c types.c graph.c hash_map.c CA.c metric.c semEP.c input.c main.c
 LIBS=		-lm
+SOLVEROBJS=	$(SOLVER:.c=.o)
+
 INSTALLDIR=	../
 
 .SUFFIXES:.c .o
@@ -23,9 +21,9 @@ $(PROG):	$(SOLVEROBJS)
 		$(CC) $(CFLAGS) -o $(INSTALLDIR)$(PROG) $(SOLVEROBJS) $(LIBS)
 
 .c.o:
-	$(CC) -c $(INCLUDES) $(CFLAGS) $(DFLAGS) $< -o $@
+	$(CC) -c  $(CFLAGS) $(DFLAGS) $< -o $@
 
 .PHONY : clean
 
 clean :
-	rm -rf $(INSTALLDIR)$(PROG) *.o *.dSYM *~
+	rm -rf $(INSTALLDIR)$(PROG) *.o *.dSYM $(INSTALLDIR)*.dSYM *~

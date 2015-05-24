@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2014 Universidad Simón Bolívar
+ * Copyright (C) 2014, 2015 Universidad Simón Bolívar
  *
  * Copying: GNU GENERAL PUBLIC LICENSE Version 2
  * @author Guillermo Palma <gpalma@ldc.usb.ve>
@@ -243,17 +243,15 @@ static void build_graph_to_coloring_matrix(struct graph *gc, VEC(node_p) *vn,
 	       c = y->pos1;
 	       d = y->pos2;
 	       assert(a <= c);
-	       if ( (a != c) && (b != d)) {
-		    if ( (M[VEC_GET(*v1, a)][VEC_GET(*v1, c)] <= threshold1) ||
-			 (M[VEC_GET(*v2, b)][VEC_GET(*v2, d)] <= threshold2)) {
-			 /* if ( (simM1[a][c] <= threshold) && (sim2 <= threshold)) { */
-			 add_arc_to_graph(gc, cont, i, j, COST);
-			 add_arc_to_graph(gc, cont, j, i, COST);
-			 cont++;
-		    }
+	       if ( (M[VEC_GET(*v1, a)][VEC_GET(*v1, c)] <= threshold1) ||
+		    (M[VEC_GET(*v2, b)][VEC_GET(*v2, d)] <= threshold2)) {
+		    add_arc_to_graph(gc, cont, i, j, COST);
+		    add_arc_to_graph(gc, cont, j, i, COST);
+		    cont++;
 	       }
 	  }
      }
+     
 }
 
 static double **similarity_between_all(const struct graph *g, const VEC(long) *v)
@@ -295,17 +293,14 @@ static void build_graph_to_coloring_graph(struct graph *gc, VEC(node_p) *vn,
 	       c = y->pos1;
 	       d = y->pos2;
 	       assert(a <= c);
-	       if ( (a != c) && (b != d)) {
-		    if (b < d)
-			 sim2 = simM2[b][d];
-		    else
-			 sim2 = simM2[d][b];
-		    if ( (simM1[a][c] <= threshold1) || (sim2 <= threshold2)) {
-			 /*if ( (simM1[a][c] <= threshold) && (sim2 <= threshold)) {*/
-			 add_arc_to_graph(gc, cont, i, j, COST);
-			 add_arc_to_graph(gc, cont, j, i, COST);
-			 cont++;
-		    }
+	       if (b < d)
+		    sim2 = simM2[b][d];
+	       else
+		    sim2 = simM2[d][b];
+	       if ( (simM1[a][c] <= threshold1) || (sim2 <= threshold2)) {
+		    add_arc_to_graph(gc, cont, i, j, COST);
+		    add_arc_to_graph(gc, cont, j, i, COST);
+		    cont++;
 	       }
 	  }
      }
@@ -1247,9 +1242,9 @@ double annotation_partition(void *object, long n_nodes,
 	  free_double_matrix(simM2, 0, 0);
      }
      tf = clock();
-     printf("Build the graph to coloring took: %.3f secs\n", (double)(tf-ti)/CLOCKS_PER_SEC);
-     printf("Bipartite Graph - Nodes A: %zu; Nodes B: %zu; Edges: %zu\n",
+     printf("Bipartite Graph data - Nodes A: %zu; Nodes B: %zu; Edges: %zu\n",
 	    VEC_SIZE(*v1), VEC_SIZE(*v2), VEC_SIZE(color_nodes));
+     printf("Time to build the graph to coloring: %.3f secs\n", (double)(tf-ti)/CLOCKS_PER_SEC);
 #ifdef PRGDEBUG
      print_graph(&gc);
 #endif
@@ -1265,7 +1260,7 @@ double annotation_partition(void *object, long n_nodes,
 	  fatal("Graph to coloring has no nodes");
      }
      tf = clock();
-     printf("Graph coloring solution took %.3f secs\n", (double)(tf-ti)/CLOCKS_PER_SEC);
+     printf("Coloring solver time %.3f secs\n", (double)(tf-ti)/CLOCKS_PER_SEC);
      message = print_output_files(&color_nodes, &partitions, v1, v2, threshold_E1, threshold_E2, name1, name2, desc);
      printf("%s", message);
      if (prediction) {
