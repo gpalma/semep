@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012, 2014 Universidad Simón Bolívar
+ * Copyright (C) 2012, 2014, 2015 Universidad Simón Bolívar
  *
  * @brief Common ancestors
  * Copying: GNU GENERAL PUBLIC LICENSE Version 2
@@ -19,26 +19,27 @@
 #include "graph.h"
 #include "CA.h"
 
-VEC(long) *get_ancestors(const struct graph *gi, long node)
+#define INVALID -1
+
+struct long_array *get_ancestors(const struct graph *gi, long node)
 {
      long i, n;
-     VEC(long) *ancs;
+     struct long_array *ancs;
      long *pred;
      long *discovered;
      long *finished;
 
-     ancs = (VEC(long) *)xmalloc(sizeof(VEC(long)));
+     ALLOC_STRUCT(ancs);
      n = gi->n_nodes;
      pred = (long *)xcalloc(n, sizeof(long));
      discovered = (long *)xcalloc(n, sizeof(long));
      finished = (long *)xcalloc(n, sizeof(long));
-     VEC_INIT(long, *ancs);
-     VEC_PUSH(long, *ancs, node);
-
+     
+     ARRAY_PUSH(*ancs, node);
      dfs_search(gi, node, discovered, finished, pred);
      for (i = 0; i < n; i++) {
 	  if (pred[i] != -1) {
-	       VEC_PUSH(long, *ancs, i);
+	       ARRAY_PUSH(*ancs, i);
 	  }
      }
      free(pred);
@@ -48,23 +49,25 @@ VEC(long) *get_ancestors(const struct graph *gi, long node)
      return ancs;
 }
 
-VEC(long) **get_all_ancestors(const struct graph *g)
+struct long_array **get_all_ancestors(const struct graph *g)
 {
      long i, j, n;
-     VEC(long) **all_a;
+     struct long_array **all_a;
      long *pred;
      long *discovered;
      long *finished;
+     struct long_array aux = {0, 0, NULL};
 
      n = g->n_nodes;
-     all_a = xmalloc(n*sizeof(VEC(long)));
+     all_a = xcalloc(n, sizeof(struct long_array *));
+     
      pred = (long *)xcalloc(n, sizeof(long));
      discovered = (long *)xcalloc(n, sizeof(long));
      finished = (long *)xcalloc(n, sizeof(long));
      for (i = 0; i < n; i++) {
-	  all_a[i] = (VEC(long) *)xmalloc(sizeof(VEC(long)));
-	  VEC_INIT(long, *all_a[i]);
-	  VEC_PUSH(long, *all_a[i], i);
+	  all_a[i] = xmalloc(sizeof(struct long_array));
+	  *all_a[i] = aux;
+	  ARRAY_PUSH(*all_a[i], i);
      }
      /* start search ancestors */
      for (i = 0; i < n; i++) {
@@ -72,7 +75,7 @@ VEC(long) **get_all_ancestors(const struct graph *g)
 	  dfs_search(g, i, discovered, finished, pred);
 	  for (j = 0; j < n; j++) {
 	       if (pred[j] != -1) {
-		    VEC_PUSH(long, *all_a[j], i);
+		    ARRAY_PUSH(*all_a[i], i);
 	       }
 	  }
      }
@@ -83,19 +86,19 @@ VEC(long) **get_all_ancestors(const struct graph *g)
      return all_a;
 }
 
-long LCA_CA(VEC(long) *lx, VEC(long) *ly, long *depth)
+long LCA_CA(struct long_array *lx, struct long_array *ly, long *depth)
 {
      long i, j, nlx, nly, vx;
      long max, lca;
 
-     max = -1;
-     lca = -1;
-     nlx = VEC_SIZE(*lx);
-     nly = VEC_SIZE(*ly);
+     max = INVALID;
+     lca = INVALID;
+     nlx = lx->nr;
+     nly = ly->nr;
      for (i = 0; i < nlx; i++) {
-	  vx = VEC_GET(*lx, i);
+	  vx = lx->data[i];
 	  for (j = 0; j < nly; j++) {
-	       if ((vx == VEC_GET(*ly, j)) && (depth[vx] > max)) {
+	       if ((vx == ly->data[j]) && (depth[vx] > max)) {
 		    max = depth[vx];
 		    lca = vx;
 	       }
@@ -106,22 +109,21 @@ long LCA_CA(VEC(long) *lx, VEC(long) *ly, long *depth)
      return lca;
 }
 
-VEC(long) *LCA_CA_SET(VEC(long) *lx, VEC(long) *ly, long *depth)
+struct long_array *LCA_CA_SET(struct long_array *lx, 
+			      struct long_array *ly, long *depth)
 {
      long i, j, nlx, nly, vx, max, lcam;
-     VEC(long) *lca;
+     struct long_array *lca;
 
-     lca = (VEC(long) *)xmalloc(sizeof(VEC(long)));
-     VEC_INIT(long, *lca);
-
-     max = -1;
-     lcam = -1;
-     nlx = VEC_SIZE(*lx);
-     nly = VEC_SIZE(*ly);
+     ALLOC_STRUCT(lca);
+     max = INVALID;
+     lcam = INVALID;
+     nlx = lx->nr;
+     nly = ly->nr;
      for (i = 0; i < nlx; i++) {
-	  vx = VEC_GET(*lx, i);
+	  vx = lx->data[i];
 	  for (j = 0; j < nly; j++) {
-	       if ((vx == VEC_GET(*ly, j)) && (depth[vx] > max)) {
+	       if ((vx == ly->data[j]) && (depth[vx] > max)) {
 		    max = depth[vx];
 		    lcam = vx;
 	       }
@@ -132,10 +134,10 @@ VEC(long) *LCA_CA_SET(VEC(long) *lx, VEC(long) *ly, long *depth)
 	  fatal("Error with the lowest common ancestor");
 
      for (i = 0; i < nlx;  i++) {
-	  vx = VEC_GET(*lx,  i);
+	  vx = lx->data[i];
 	  for (j = 0; j < nly; j++) {
-	       if ((vx == VEC_GET(*ly, j)) && (depth[vx] == max)) {
-		    VEC_PUSH(long, *lca, vx);
+	       if ((vx == ly->data[j]) && (depth[vx] == max)) {
+		    ARRAY_PUSH(*lca, vx);
 	       }
 	  }
      }

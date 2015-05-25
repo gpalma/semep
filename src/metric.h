@@ -32,6 +32,6 @@ void free_metric(void);
 
 const long *get_nodes_depth(void);
 
-VEC(long) *lca_vector(long x, long y);
+struct long_array *lca_vector(long x, long y);
 
 #endif /* ___METRIC_H */

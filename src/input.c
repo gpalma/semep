@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2013, 2014 Universidad Simón Bolívar
+ * Copyright (C) 2013, 2014, 2015 Universidad Simón Bolívar
  *
  * Copying: GNU GENERAL PUBLIC LICENSE Version 2
  * @author Guillermo Palma <gpalma@ldc.usb.ve>
@@ -11,6 +11,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <assert.h>
 
 #include "types.h"
 #include "graph.h"
@@ -59,7 +60,8 @@ struct char_array {
 
 struct string_array {
      unsigned nr;
-     char **strs;
+     unsigned alloc;
+     char **data;
 };
 
 enum node {
@@ -433,17 +435,11 @@ static void print_term_data(const struct term_data *td)
 }
 #endif
 
-static void initialize_string_array(struct string_array *sa, long n)
-{
-     sa->nr = n;
-     sa->strs = xmalloc(n*sizeof(char *));
-}
-
 static void free_string_array(struct string_array *sa)
 {
      for (unsigned i = 0; i < sa->nr; i++)
-	  free(sa->strs[i]);
-     free(sa->strs);
+	  free(sa->data[i]);
+     free(sa->data);
      sa->nr = 0;
 }
 
@@ -452,7 +448,7 @@ static void annotations_load(struct string_array *sa, const char *annt_filename)
      FILE *f;
      char buf[128];
      size_t len;
-     long i, n;
+     unsigned i, n;
 
      f = fopen(annt_filename, "r");
      if (!f) {
@@ -464,16 +460,18 @@ static void annotations_load(struct string_array *sa, const char *annt_filename)
      n = strtol(buf, NULL, 10);
      if (errno)
 	  fatal("Error in the conversion of string to integer\n");
-     initialize_string_array(sa, n);
+     ALLOC_GROW(sa->data, n, sa->alloc);
      for (i = 0; i < n; i++) {
 	  if (fgets(buf, sizeof(buf), f) == NULL)
 	       fatal("Error reading file");
 	  len = strlen(buf) - 1;
 	  if(buf[len] == '\n')
 	       buf[len] = 0;
-	  sa->strs[i] = xcalloc(len+1, sizeof(char));
-	  strcpy(sa->strs[i], buf);
+	  sa->data[sa->nr] = xcalloc(len+1, sizeof(char));
+	  strcpy(sa->data[sa->nr], buf);
+	  sa->nr++;
      }
+     assert(n == sa->nr);
      fclose(f);
 }
 
@@ -484,7 +482,7 @@ static void print_string_array(struct string_array *sa)
 
      printf("\nAnnotations\n");
      for (i = 0; i < sa->nr; i++)
-	  printf("%s\n", sa->strs[i]);
+	  printf("%s\n", sa->data[i]);
      printf("\n");
 }
 #endif
@@ -493,10 +491,9 @@ static void print_string_array(struct string_array *sa)
  ** Generation of the internal representation of the ontology graph
  ********************************************************************/
 
-VEC(string) get_graph_roots(const struct graph_data *gd)
+static void get_graph_roots(const struct graph_data *gd, struct string_array *roots)
 {
      long i;
-     VEC(string) roots;
      struct hash_map root_set;
      struct node_type *item;
      struct hash_entry *hentry;
@@ -504,7 +501,6 @@ VEC(string) get_graph_roots(const struct graph_data *gd)
      size_t len;
      char *term;
 
-     VEC_INIT(string, roots);
      hmap_create(&root_set, HASH_SZ);
      for (i = 0; i < gd->n_arcs; i++) {
 	  len = strlen(gd->larcs[i].from);
@@ -532,26 +528,20 @@ VEC(string) get_graph_roots(const struct graph_data *gd)
 	  if (item->ntype == ROOT) {
 	       term = xmalloc(hentry->keylen+1);
 	       strcpy(term, hentry->key);
-	       VEC_PUSH(string, roots, term);
+	       ARRAY_PUSH(*roots, term);
 	  }
 	  hmap_delete(&root_set, hentry);
 	  free(item);
      }
      hmap_destroy(&root_set);
-
-     return roots;
 }
 
 #ifdef PRGDEBUG
-static void print_ontology_roots(const VEC(string) *roots)
+static void print_ontology_roots(conts struct string_array *roots)
 {
-     unsigned i;
-     char *term;
-
      printf("\nRoots of the ontology\n");
-     for (i = 0; i < VEC_SIZE(*roots); i++) {
-	  term = VEC_GET(*roots, i);
-	  printf("%s\n", term);
+     for (unsigned i = 0; i < roots->nr; i++) {
+	  printf("%s\n", roots->data[i]);
      }
      printf("\n");
 }
@@ -559,15 +549,15 @@ static void print_ontology_roots(const VEC(string) *roots)
 
 static void configure_the_single_root(struct graph_data *gd,
                                       struct term_data *td,
-                                      const VEC(string) *roots)
+                                      const struct string_array *roots)
 {
   long i, j, alloc, nr;
   char *term, *tmp;
   const char *root_name = "ROOT";
   const char *root_desc = "Ontology Root";
 
-  if (VEC_SIZE(*roots) == 1) {
-    term = VEC_GET(*roots, 0);
+  if (roots->nr == 1) {
+    term = roots->data[0];
     if (strcmp(term, td->term_array[0].name) != 0) {
       for (i = 0; i < td->nr; i++) {
         if (strcmp(term, td->term_array[i].name) == 0) {
@@ -590,12 +580,12 @@ static void configure_the_single_root(struct graph_data *gd,
     td->term_array[0].description = xmalloc(strlen(root_desc)+1);
     strcpy(td->term_array[0].name, root_name);
     strcpy(td->term_array[0].description, root_desc);
-    alloc = gd->n_arcs+VEC_SIZE(*roots);
+    alloc = gd->n_arcs + roots->nr;
     gd->larcs = xrealloc(gd->larcs, alloc*sizeof(struct arc));
     for (i = gd->n_arcs, j = 0; i < alloc; i++, j++) {
       gd->larcs[i].from = xmalloc(strlen(root_name)+1);
       strcpy(gd->larcs[i].from, root_name);
-      term = VEC_GET(*roots, j);
+      term = roots->data[j];
       gd->larcs[i].to = xmalloc(strlen(term)+1);
       strcpy(gd->larcs[i].to, term);
       gd->larcs[i].cost = COST;
@@ -685,40 +675,39 @@ static char **get_descriptions(const struct term_data *td)
 }
 
 #ifdef PRGDEBUG
-static void print_annotations(const VEC(long) *annts)
+static void print_annotations(const struct long_array *annts)
 {
-     unsigned i;
      long term;
 
      printf("\nAnnotations\n");
-     for (i = 0; i < VEC_SIZE(*annts); i++) {
-	  term = VEC_GET(*annts, i);
+     for (unsigned i = 0; i < annts->nr; i++) {
+	  term = annts->data[i];
 	  printf("%ld\n", term);
      }
      printf("\n");
 }
 #endif
 
-static VEC(long) get_annotations(struct string_array *sa,
-                                 struct hash_map *term_pos)
+static struct long_array get_annotations(struct string_array *sa,
+					 struct hash_map *term_pos)
 {
-     long i, n;
-     VEC(long) annts;
+     unsigned i, n;
      struct concept *item;
      struct hash_entry *hentry;
      size_t len;
-
+     struct long_array annts = {0, 0, NULL};
+     
      n = sa->nr;
-     VEC_INIT_N(long, annts, n);
+     ALLOC_GROW(annts.data, n, annts.alloc);
      for (i = 0; i < n; i++) {
-	  len = strlen(sa->strs[i]);
-	  hentry = hmap_find_member(term_pos, sa->strs[i], len);
+	  len = strlen(sa->data[i]);
+	  hentry = hmap_find_member(term_pos, sa->data[i], len);
 	  if (hentry == NULL)
-	       fatal("The term %s does not exist in the term list", sa->strs[i]);
+	       fatal("The term %s does not exist in the term list", sa->data[i]);
 	  item = hash_entry(hentry, struct concept, entry);
 	  if (item == NULL)
 	       fatal("Invalid annotation");
-	  VEC_PUSH(long, annts, item->pos);
+	  ARRAY_PUSH(annts, item->pos);
      }
      return annts;
 }
@@ -759,13 +748,11 @@ static struct graph *generate_internal_graph(const struct graph_data *gd,
   return g;
 }
 
-static void free_roots(VEC(string) *roots)
+static void free_roots(struct string_array *roots)
 {
-  unsigned i;
-
-  for (i = 0; i < VEC_SIZE(*roots); i++)
-     free(VEC_GET(*roots, i));
-  VEC_DESTROY(*roots);
+   for (unsigned i = 0; i < roots->nr; i++)
+     free(roots->data[i]);
+  free(roots->data);
 }
 
 /*********************************
@@ -781,8 +768,8 @@ void free_input_data(struct input_data *in, bool matrix)
      for (i = 0; i < in->n; i++)
 	  free(in->descriptions[i]);
      free(in->descriptions);
-     VEC_DESTROY(in->anntt1);
-     VEC_DESTROY(in->anntt2);
+     free(in->anntt1.data);
+     free(in->anntt2.data);
      if (matrix) {
 	  m = (double **)in->object;
 	  free_double_matrix(m, 0, 0);
@@ -800,11 +787,12 @@ struct input_data get_input_data(const char *object_filename, const char *desc_f
      struct graph_data gd;
      struct input_data in;
      struct term_data td;
-     struct string_array sa1, sa2;
      struct hash_map term_pos;
      double **sim_matrix;
      struct graph *g;
-     VEC(string) roots;
+     struct string_array sa1 = {0, 0, NULL};
+     struct string_array sa2 = {0, 0, NULL};
+     struct string_array roots = {0, 0, NULL};
 
      load_of_terms(&td, desc_filename, description);
      annotations_load(&sa1, annt1_filename);
@@ -819,11 +807,12 @@ struct input_data get_input_data(const char *object_filename, const char *desc_f
 	  in.n = graph_loading(&gd, object_filename);
 	  if (td.nr != in.n)
 	       fatal("Number of nodes of the graph is diferent to the number of terms");
-	  roots = get_graph_roots(&gd);
+	  get_graph_roots(&gd, &roots);
 	  configure_the_single_root(&gd, &td, &roots);
 	  map_term_pos(&term_pos, &td);
 	  in.descriptions = get_descriptions(&td);
 	  g = generate_internal_graph(&gd, &term_pos);
+	  add_reprensentative_ancestor(g);
 	  in.n = g->n_nodes;
 	  printf("Input graph has %ld vertices\n", in.n);
 	  in.object = g;

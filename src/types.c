@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012, Universidad Simón Bolívar
+ * Copyright (C) 2012, 2015 Universidad Simón Bolívar
  *
  * Copying: GNU GENERAL PUBLIC LICENSE Version 2
  * @author Guillermo Palma <gpalma@ldc.usb.ve>
@@ -48,13 +48,11 @@ void copy_long_list(struct long_list *dst, struct long_list *src)
   }
 }
 
-void print_vec_long(VEC(long) *v)
+void print_vec_long(struct long_array *v)
 {
-  unsigned long i;
-
   printf("\n");
-  for (i = 0; i < VEC_SIZE(*v); i++) {
-    printf("%ld ", VEC_GET(*v, i));
+  for (size_t i = 0; i < v->nr; i++) {
+    printf("%ld ", v->data[i]);
   }
   printf("\n");
 }

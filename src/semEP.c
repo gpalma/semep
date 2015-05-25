@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2014, 2015 Universidad Simón Bolívar
+ * Copyright (C) 2013, 2014, 2015 Universidad Simón Bolívar
  *
  * Copying: GNU GENERAL PUBLIC LICENSE Version 2
  * @author Guillermo Palma <gpalma@ldc.usb.ve>
@@ -40,42 +40,35 @@
 #define LEFT(i)       (((i) * 2) + 1)
 #define RIGHT(i)      (((i) * 2) + 2)
 
-typedef struct color {
+struct color {
      long id;
      double sim_entity_1;
      double sim_entity_2;
      double sim_between;
-     VEC(long) id_nodes;
-     VEC(long) entities1;
-     VEC(long) entities2;
-} color_t;
+     struct long_array id_nodes;
+     struct long_array entities1;
+     struct long_array entities2;
+};
 
-typedef color_t *color_p;
-DEFINE_VEC(color_p);
+struct color_ptr_array{
+     unsigned nr;
+     unsigned alloc;
+     struct color **data;
+};
 
-typedef struct node {
+struct node {
      long id;
      long pos1;
      long pos2;
      double sim;
-     color_p cp;
-} node_t;
+     struct color *cp;
+};
 
-typedef node_t *node_p;
-DEFINE_VEC(node_p);
-
-typedef struct prediction {
-     long entity1;
-     long entity2;
-     double prob;
-} prediction_t;
-
-DEFINE_VEC(prediction_t);
-
-typedef struct prediction_array {
+struct node_ptr_array{
      unsigned nr;
-     VEC(prediction_t) *pred;
-} prediction_array_t;
+     unsigned alloc;
+     struct node **data;
+};
 
 typedef struct item_entry {
      double value;
@@ -93,7 +86,23 @@ typedef struct pqueue {
      saturation_t **heap;
 } pqueue_t; 
 
-static struct hash_map sim_map; /* Hash table with all similitudes calculated */
+typedef struct prediction {
+     long entity1;
+     long entity2;
+     double prob;
+} prediction_t;
+
+typedef struct prediction_array {
+     unsigned nr;
+     unsigned alloc;
+     prediction_t *data;
+} prediction_array_t;
+
+typedef struct prediction_partition {
+     unsigned nr;
+     prediction_array_t *pred; 
+} prediction_partition_t;
+
 static double (*metricPtr)(const struct graph *g, long x, long y);
 
 /*************************************
@@ -106,38 +115,10 @@ static double (*metricPtr)(const struct graph *g, long x, long y);
 
 static double get_similarity(const struct graph *g, long x, long y)
 {
-     int l;
-     char *buf;
-     item_entry_t *item;
-     struct hash_entry *hentry;
-     double sim;
-
-     if (x > y) {
-	  l = asprintf(&buf, "%ld-%ld", x, y);
-     } else {
-	  l = asprintf(&buf, "%ld-%ld", y, x);
-     }
-
-     if (l == -1)
-	  fatal("Error in output directory");
-
-     hentry = hmap_find_member(&sim_map, buf, l);
-     if (hentry == NULL) {
-	  sim = (*metricPtr)(g, x, y);
-	  //sim = sim_dtax(g, x, y);
-	  item = (item_entry_t *)xmalloc(sizeof(item_entry_t));
-	  item->value = sim;
-	  if (hmap_add(&sim_map, &item->entry, buf, l) != 0)
-	       fatal("Error in similarity hash table");
-     } else {
-	  item = hash_entry(hentry, item_entry_t, entry);
-	  sim = item->value;
-     }
-     free(buf);
-     return sim;
+     return (*metricPtr)(g, x, y);
 }
 
-static struct lpairs get_max_group_depth(const VEC(long) *v1)
+static struct lpairs get_max_group_depth(const struct long_array *v1)
 {
      long max_depth = 0; /* ROOT depth */
      long max_node = ROOT;
@@ -146,9 +127,9 @@ static struct lpairs get_max_group_depth(const VEC(long) *v1)
      struct lpairs p;
 
      depth = get_nodes_depth();
-     n = VEC_SIZE(*v1);
+     n = v1->nr;
      for (i = 0; i < n; i++) {
-	  node = VEC_GET(*v1, i);
+	  node = v1->data[i];
 	  if (max_depth <  depth[node]) {
 	       max_depth = depth[node];
 	       max_node = node;
@@ -168,56 +149,56 @@ static struct lpairs get_max_group_depth(const VEC(long) *v1)
  ************************************
  ************************************/
 
-static bool *nodes_in_the_term(const VEC(long) *terms, long max)
+static bool *nodes_in_the_term(const struct long_array *terms, long max)
 {
-     unsigned i;
      bool *in_term;
 
      in_term = (bool *)xcalloc(max, sizeof(bool));
      memset(in_term, false, max*sizeof(bool));
 
-     for (i = 0; i < VEC_SIZE(*terms); i++)
-	  in_term[VEC_GET(*terms, i)] = true;
+     for (size_t i = 0; i < terms->nr; i++)
+	  in_term[terms->data[i]] = true;
 
      return in_term;
 }
 
-static void compute_color_nodes(void *object, const VEC(long) *v1, const VEC(long) *v2,
-				VEC(node_p) *color_nodes, double threshold,
+static void compute_color_nodes(void *object, const struct long_array *v1,
+				const struct long_array *v2,
+				struct node_ptr_array *color_nodes, double threshold,
 				const bool* in_terms1, const bool* in_terms2, bool matrix)
 {
      long i, j, n, m, x, y, cont;
      double sim;
-     node_p new;
+     struct node *new;
      double **M = NULL;
-     graph_t *g;
+     struct graph *g = NULL;
 
      if (matrix) {
 	  M = (double **)object;
      } else {
-	  g = (graph_t *)object;
+	  g = (struct graph *)object;
      }
 
      cont = 0;
-     n = VEC_SIZE(*v1);
-     m = VEC_SIZE(*v2);
+     n = v1->nr;
+     m = v2->nr;
      for (i = 0; i < n; i++) {
-	  x = VEC_GET(*v1, i);
+	  x = v1->data[i];
 	  for (j = 0; j < m; j++) {
-	       y = VEC_GET(*v2, j);
+	       y = v2->data[j];
 	       if (matrix)
 		    sim = M[x][y];
 	       else
 		    sim = get_similarity(g,x,y);
 	       if  (sim > threshold) {
 		    if (!((in_terms2[x] && in_terms1[y]) && (x != y))) {
-			 new = (node_p)xcalloc(1, sizeof(node_t));
+			 new = xcalloc(1, sizeof(struct node));
 			 new->id = cont;
 			 new->pos1 = i;
 			 new->pos2 = j;
 			 new->sim = sim;
 			 new->cp = NULL;
-			 VEC_PUSH(node_p, *color_nodes, new);
+			 ARRAY_PUSH(*color_nodes, new);
 			 cont++;
 		    }
 	       }
@@ -225,79 +206,76 @@ static void compute_color_nodes(void *object, const VEC(long) *v1, const VEC(lon
      }
 }
 
-static void build_graph_to_coloring_matrix(struct graph *gc, VEC(node_p) *vn,
-					   double **M, const VEC(long) *v1, const VEC(long) *v2,
+static void build_graph_to_coloring_matrix(struct graph *gc, 
+					   struct node_ptr_array *vn, double **M, 
+					   const struct long_array *v1, 
+					   const struct long_array *v2,
 					   double threshold1, double threshold2)
 {
      long i, j, n, a, b, c, d, cont;
-     node_p x, y;
+     struct node *x, *y;
 
-     n = VEC_SIZE(*vn);
+     n = vn->nr;
      cont = 0;
      for (i = 0; i < n-1; i++) {
-	  x = VEC_GET(*vn, i);
+	  x = vn->data[i];
 	  a = x->pos1;
 	  b = x->pos2;
 	  for (j = i+1; j < n; j++) {
-	       y = VEC_GET(*vn, j);
+	       y = vn->data[j];
 	       c = y->pos1;
 	       d = y->pos2;
 	       assert(a <= c);
-	       if ( (M[VEC_GET(*v1, a)][VEC_GET(*v1, c)] <= threshold1) ||
-		    (M[VEC_GET(*v2, b)][VEC_GET(*v2, d)] <= threshold2)) {
+	       if ( (M[v1->data[a]][v1->data[c]] <= threshold1) ||
+		    (M[v2->data[b]][v2->data[d]] <= threshold2)) {
 		    add_arc_to_graph(gc, cont, i, j, COST);
 		    add_arc_to_graph(gc, cont, j, i, COST);
 		    cont++;
 	       }
 	  }
      }
-     
 }
 
-static double **similarity_between_all(const struct graph *g, const VEC(long) *v)
+static double **similarity_between_all(const struct graph *g, const struct long_array *v)
 {
      long i, j, n;
      double **sim_matrix;
 
-     n = VEC_SIZE(*v);
+     n = v->nr;
      sim_matrix = double_matrix(0, n, 0, n);
-     for (i = 0; i < n-1; i++) {
-	  for (j = i+1; j < n; j++) {
-	       sim_matrix[i][j] = get_similarity(g, VEC_GET(*v, i), VEC_GET(*v, j));
-	       DEBUG("annt1 %ld annt2 %ld sim %.3f\n", VEC_GET(*v, i), VEC_GET(*v, j), sim_matrix[i][j]);
+     for (i = 0; i < n; i++) {
+	  for (j = i; j < n; j++) {
+	       sim_matrix[i][j] = get_similarity(g, v->data[i], v->data[j]);
+	       /* I suppose that the similarity measure is symmetric */
+	       sim_matrix[j][i] = sim_matrix[i][j];
 	  }
      }
      return sim_matrix;
 }
 
-static void build_graph_to_coloring_graph(struct graph *gc, VEC(node_p) *vn,
+static void build_graph_to_coloring_graph(struct graph *gc, struct node_ptr_array *vn,
 					  double **simM1, double **simM2,
 					  double threshold1, double threshold2)
 {
      long i, j, n, a, b, c, d, cont;
-     node_p x, y;
-     double sim2;
+     struct node *x, *y;
 
      if (simM1 == NULL)
 	  fatal("Matrix 1 is NULL");
      if (simM2 == NULL)
 	  fatal("Matrix 2 is NULL");
-     n = VEC_SIZE(*vn);
+     n = vn->nr;
      cont = 0;
      for (i = 0; i < n-1; i++) {
-	  x = VEC_GET(*vn, i);
+	  x = vn->data[i];
 	  a = x->pos1;
 	  b = x->pos2;
 	  for (j = i+1; j < n; j++) {
-	       y = VEC_GET(*vn, j);
+	       y = vn->data[j];
 	       c = y->pos1;
 	       d = y->pos2;
 	       assert(a <= c);
-	       if (b < d)
-		    sim2 = simM2[b][d];
-	       else
-		    sim2 = simM2[d][b];
-	       if ( (simM1[a][c] <= threshold1) || (sim2 <= threshold2)) {
+	       if ( (simM1[a][c] <= threshold1) || (simM2[b][d] <= threshold2)) {
 		    add_arc_to_graph(gc, cont, i, j, COST);
 		    add_arc_to_graph(gc, cont, j, i, COST);
 		    cont++;
@@ -314,7 +292,7 @@ static void build_graph_to_coloring_graph(struct graph *gc, VEC(node_p) *vn,
  ************************************
  ************************************/
 
-static inline int compare_saturation(const graph_t *g, const saturation_t *a, const saturation_t *b)
+static inline int compare_saturation(const struct graph *g, const saturation_t *a, const saturation_t *b)
 {
      int r;
 
@@ -473,16 +451,16 @@ static void init_saturation_pq(const struct graph *g, pqueue_t *pq)
      }
 }
 
-static inline long get_color(const VEC(node_p) *node_color, long pos)
+static inline long get_color(const struct node_ptr_array *node_color, long pos)
 {
      long color;
-     node_p node_ptr;
+     struct node *node_ptr;
 
      if (pos < 0)
 	  fatal("Invalid position");
      if (node_color == NULL)
 	  fatal("Invalid pointer to color");
-     node_ptr = VEC_GET(*node_color, pos);
+     node_ptr = node_color->data[pos];
      if (node_ptr->cp == NULL) {
 	  color = NOCOLOR;
      } else {
@@ -491,7 +469,8 @@ static inline long get_color(const VEC(node_p) *node_color, long pos)
      return color;
 }
 
-static bool *get_ady_used_color(const struct graph *g, const VEC(node_p) *node_color, long node)
+static bool *get_ady_used_color(const struct graph *g, 
+				const struct node_ptr_array *node_color, long node)
 {
      struct edge_list *tmp;
      bool *color_used;
@@ -512,7 +491,7 @@ static bool *get_ady_used_color(const struct graph *g, const VEC(node_p) *node_c
 }
 
 static void update_saturation_degree(const struct graph *g, pqueue_t *pq, 
-				     long node, const VEC(node_p) *node_color)
+				     long node, const struct node_ptr_array *node_color)
 {
      struct edge_list *tmp;
      int r;
@@ -527,7 +506,8 @@ static void update_saturation_degree(const struct graph *g, pqueue_t *pq,
      }
 }
 
-static long greatest_saturation_node(const graph_t *g, pqueue_t *pq, const VEC(node_p) *node_color)
+static long greatest_saturation_node(const struct graph *g, pqueue_t *pq, 
+				     const struct node_ptr_array *node_color)
 {
      long r, color, node;
      saturation_t *ns;
@@ -554,15 +534,16 @@ static long greatest_saturation_node(const graph_t *g, pqueue_t *pq, const VEC(n
      return node;
 }
 
-static void get_free_colors(const graph_t *g, const VEC(node_p) *solution, long node,
-			    VEC(long) *available_colors, VEC(color_p) *partitions)
+static void get_free_colors(const struct graph *g, const struct node_ptr_array *solution,
+			    long node, struct long_array *available_colors,
+			    struct color_ptr_array *partitions)
 {
      long i, cn, n;
      bool *color_used;
      long color_no_used;
-     color_p ctmp;
+     struct color *ctmp;
 
-     n = VEC_SIZE(*partitions);
+     n = partitions->nr;
      color_no_used = n+1;
      color_used = NULL;
      assert(g->n_nodes > node);
@@ -572,61 +553,62 @@ static void get_free_colors(const graph_t *g, const VEC(node_p) *solution, long 
      if ((cn != NOCOLOR) && (!color_used[cn])) /* any adjacent vertex has the same color */
 	  fatal("a adjacent node are using the same color");
      for (i = 0; i < n; i++) {
-	  ctmp = VEC_GET(*partitions, i);
+	  ctmp = partitions->data[i];
 	  assert(ctmp->id == i);
 	  if (!color_used[i]) {
-	       VEC_PUSH_FAST(*available_colors, i);
+	      available_colors->data[available_colors->nr++] = i;
 	  }
      }
-     if (VEC_SIZE(*available_colors) == 0)
-	  VEC_PUSH_FAST(*available_colors, n);
+     if (available_colors->nr == 0)
+	  available_colors->data[available_colors->nr++] = i;
      free(color_used);
 }
 
-static inline color_p new_color(long id, double sim_e1, double sim_e2, double sim_bt,
-				long node, long e1, long e2)
+static inline struct color *new_color(long id, double sim_e1, double sim_e2, 
+				      double sim_bt, long node, long e1, long e2)
 {
-     color_p new;
+     struct color *new;
+     struct long_array aux = {0, 0, NULL};
 
-     new = (color_p)xcalloc(1, sizeof(color_t));
+     new = xcalloc(1, sizeof(struct color));
      new->id = id;
      new->sim_entity_1 = sim_e1;
      new->sim_entity_2 = sim_e2;
      new->sim_between = sim_bt;
-     VEC_INIT(long, new->id_nodes);
-     VEC_PUSH(long, new->id_nodes, node);
-     VEC_INIT(long, new->entities1);
-     VEC_PUSH(long, new->entities1, e1);
-     VEC_INIT(long, new->entities2);
-     VEC_PUSH(long, new->entities2, e2);
+     new->id_nodes = aux;
+     ARRAY_PUSH(new->id_nodes, node);
+     new->entities1 = aux;
+     ARRAY_PUSH(new->entities1, e1);
+     new->entities2 = aux;
+     ARRAY_PUSH(new->entities2, e2);
 
      return new;
 }
 
-static void free_color(color_p c)
+static void free_color(struct color *c)
 {
-     VEC_DESTROY(c->id_nodes);
-     VEC_DESTROY(c->entities1);
-     VEC_DESTROY(c->entities2);
+     free(c->id_nodes.data);
+     free(c->entities1.data);
+     free(c->entities2.data);
      free(c);
 }
 
-static double get_partition_simililarity(color_p c)
+static double get_partition_similarity(struct color *c)
 {
      long n, m;
      double bpe, annt1, annt2;
 
-     n = VEC_SIZE(c->entities1);
-     m = VEC_SIZE(c->entities2);
-     bpe = (double)(c->sim_between/VEC_SIZE(c->id_nodes));
+     n = c->entities1.nr;
+     m = c->entities2.nr;
+     bpe = (double)c->sim_between/c->id_nodes.nr;
      if (n > 1) {
-	  annt1 = (double)(c->sim_entity_1/((n*n-n)/2));
+	  annt1 = (double)c->sim_entity_1/((n*n-n)/2.0);
      } else {
 	  annt1 = c->sim_entity_1;
 	  assert(annt1 == 0.0);
      }
      if (m > 1) {
-	  annt2 = (double)(c->sim_entity_2/((m*m-m)/2));
+	  annt2 = (double)c->sim_entity_2/((m*m-m)/2.0);
      } else {
 	  annt2 = c->sim_entity_2;
 	  assert(annt2 == 0.0);
@@ -634,68 +616,72 @@ static double get_partition_simililarity(color_p c)
      return (bpe + annt1 + annt2);
 }
 
-static double density_total_add(void *object, VEC(color_p) *partitions, node_p new_node,
-				const VEC(long) *v1, const VEC(long) *v2, long color, bool matrix)
+
+static double density_total_add(void *object, struct color_ptr_array *partitions,
+				struct node *new_node, 
+				const struct long_array *v1,
+				const struct long_array *v2, 
+				long color, bool matrix)
 {
      long i, n, m, e1, e2, ep, n_colors;
-     color_p cptr;
+     struct color *cptr;
      double annt1_nc, annt2_nc, bpe_nc, dt, sim, bpe, annt1, annt2;
-     graph_t *g;
-     double **M;
+     struct graph *g = NULL;
+     double **M = NULL;
 
      if (matrix)
 	  M = (double **)object;
      else
-	  g = (graph_t *)object;
+	  g = (struct graph *)object;
 
      dt = 0.0;
-     cptr = VEC_GET(*partitions, color);
+     cptr = partitions->data[color];
      assert(cptr->id == color);
-     n = VEC_SIZE(cptr->entities1);
-     e1 = VEC_GET(*v1, new_node->pos1);
+     n = cptr->entities1.nr;
+     e1 = v1->data[new_node->pos1];
      annt1_nc = 0.0;
      for (i = 0; i < n; i++) {
-	  ep = VEC_GET(cptr->entities1, i);
+	  ep = cptr->entities1.data[i];
 	  if (matrix)
 	       annt1_nc += M[ep][e1];
 	  else
 	       annt1_nc += get_similarity(g, ep, e1);
      }
 
-     n = VEC_SIZE(cptr->entities2);
-     e2 = VEC_GET(*v2, new_node->pos2);
+     n = cptr->entities2.nr;
+     e2 = v2->data[new_node->pos2];
      annt2_nc = 0.0;
      for (i = 0; i < n; i++) {
-	  ep = VEC_GET(cptr->entities2, i);
+	  ep = cptr->entities2.data[i];
 	  if (matrix)
 	       annt2_nc += M[ep][e2];
 	  else
 	       annt2_nc += get_similarity(g, ep, e2);
      }
      bpe_nc = cptr->sim_between;
-     n_colors = VEC_SIZE(*partitions);
+     n_colors = partitions->nr;
      for (i = 0; i < n_colors; i++) {
-	  cptr = VEC_GET(*partitions, color);
+	  cptr = partitions->data[color];
 	  assert(cptr->id == color);
 	  if (i == color) {
-	       n = VEC_SIZE(cptr->entities1) + 1;
-	       m = VEC_SIZE(cptr->entities2) + 1;
-	       bpe = (double)((cptr->sim_between+bpe_nc)/(VEC_SIZE(cptr->id_nodes)+1));
+	       n = cptr->entities1.nr + 1;
+	       m = cptr->entities2.nr + 1;
+	       bpe = (double)(cptr->sim_between + bpe_nc)/(cptr->id_nodes.nr + 1.0);
 	       if (n > 1) {
-		    annt1 = (double)((cptr->sim_entity_1 + annt1_nc)/((n*n-n)/2));
+		    annt1 = (double)(cptr->sim_entity_1 + annt1_nc)/((n*n-n)/2.0);
 	       } else {
 		    annt1 = annt1_nc;
 		    assert(cptr->sim_entity_1 == 0.0);
 	       }
 	       if (m > 1) {
-		    annt2 = (double)((cptr->sim_entity_2 + annt2_nc)/((m*m-m)/2));
+		    annt2 = (double)(cptr->sim_entity_2 + annt2_nc)/((m*m-m)/2.0);
 	       } else {
 		    annt2 = annt2_nc;
 		    assert(cptr->sim_entity_2 == 0.0);
 	       }
 	       sim = bpe + annt1 + annt2;
 	  } else {
-	       sim = get_partition_simililarity(cptr);
+	       sim = get_partition_similarity(cptr);
 	  }
 	  dt += 1.0 - (sim/3.0);
      }
@@ -703,46 +689,47 @@ static double density_total_add(void *object, VEC(color_p) *partitions, node_p n
      return dt;
 }
 
-static double density_total(VEC(color_p) *partitions)
+static double density_total(struct color_ptr_array *partitions)
 {
      long i, n_colors;
      double dt;
-     color_p c;
+     struct color *c;
 
      dt = 0.0;
-     n_colors = VEC_SIZE(*partitions);
+     n_colors = partitions->nr;
      for (i = 0; i < n_colors; i++) {
-	  c = VEC_GET(*partitions, i);
-	  dt += 1.0 - (get_partition_simililarity(c)/3.0);
+	  c = partitions->data[i];
+	  dt += 1.0 - (get_partition_similarity(c)/3.0);
      }
      assert(dt/n_colors <= 1.0);
      return dt;
 }
 
-static long get_color_of_minimum_density(void *object, const VEC(node_p) *vn,
-					 VEC(color_p) *partitions,
-					 long new_node, const VEC(long) *free_colors,
-					 const VEC(long) *v1, const VEC(long) *v2, bool matrix)
+static long get_color_of_minimum_density(void *object, const struct node_ptr_array *vn,
+					 struct color_ptr_array *partitions,
+					 long new_node, struct long_array *free_colors,
+					 const struct long_array *v1, 
+					 const struct long_array *v2, bool matrix)
 {
      long i, n, best_color, n_colors, new_color;
      double nc_best, nc, current_density;
-     node_p nptr;
+     struct node *nptr;
 
-     n = VEC_SIZE(*free_colors);
+     n = free_colors->nr;
      best_color = -1;
      nc_best = INFTY;
-     n_colors = VEC_SIZE(*partitions);
+     n_colors = partitions->nr;
      current_density = density_total(partitions);
-     nptr = VEC_GET(*vn, new_node);
+     nptr = vn->data[new_node];
      for (i = 0; i < n; i++) {
-	  new_color = VEC_GET(*free_colors, i);
+	  new_color = free_colors->data[i];
 	  assert((new_color >= 0) && (new_color <= n_colors));
 	  DEBUG("Color to evaluate %ld ", new_color);
 	  if (n_colors == new_color) {
 	       /* mew color */
-	       nc = (double)((current_density + (1.0 - nptr->sim/3.0))/(n_colors+1));
+	       nc = (double)(current_density + (1.0 - nptr->sim/3.0)) / (n_colors+1.0);
 	  } else {
-	       nc = (double)(density_total_add(object, partitions, nptr, v1, v2, new_color, matrix)/n_colors);
+	       nc = (double)density_total_add(object, partitions, nptr, v1, v2, new_color, matrix)/n_colors;
 	  }
 	  if (nc_best > nc) {
 	       nc_best = nc;
@@ -754,32 +741,33 @@ static long get_color_of_minimum_density(void *object, const VEC(node_p) *vn,
      } else {
 	  n = n_colors;
      }
-     if ((double)(nc_best/n) > 1.0) {
+     if ( (double)nc_best/n > 1.0) {
 	  fatal("computed a density not valid");
      }
      return best_color;
 }
 
-static double compute_pairwise_sim(void *object, const VEC(long) *v, bool matrix)
+static double compute_pairwise_sim(void *object, const struct long_array *v, bool matrix)
 {
      long i, j, n, m;
      double sim;
-     double **M;
-     graph_t *g;
+     double **M = NULL;
+     struct graph *g = NULL;
 
      if (matrix)
 	  M = (double **)object;
      else
-	  g = (graph_t *)object;
+	  g = (struct graph *)object;
      sim = 0.0;
-     m = VEC_SIZE(*v);
+     m = v->nr;
      n = m - 1;
      for (i = 0; i < n; i++)  {
 	  for (j = i+1; j < m; j++) {
-	       if (matrix)
-		    sim += M[VEC_GET(*v, i)][VEC_GET(*v, j)];
-	       else
-		    sim += get_similarity(g, VEC_GET(*v, i), VEC_GET(*v, j));
+	       if (matrix) {
+		    sim += M[v->data[i]][v->data[j]];
+	       } else {
+		    sim += get_similarity(g, v->data[i], v->data[j]);
+	       }
 	  }
      }
      return sim;
@@ -788,46 +776,45 @@ static double compute_pairwise_sim(void *object, const VEC(long) *v, bool matrix
 /*
  * Return true if the entity was added
  */
-static bool add_if_not_contains(VEC(long) *v, long entity)
+static bool add_if_not_contains(struct long_array *v, long entity)
 {
-     unsigned i;
-
-     for (i = 0; i < VEC_SIZE(*v); i++) {
-	  if (VEC_GET(*v, i) == entity)
+     for (unsigned i = 0; i < v->nr; i++) {
+	  if (v->data[i] == entity)
 	       return false;
      }
-     VEC_PUSH(long, *v, entity);
+     ARRAY_PUSH(*v, entity);
      return true;
 }
 
-static void set_colors(void *object, VEC(color_p) *partitions, long color, node_p nptr,
-		       const VEC(long) *v1, const VEC(long) *v2, bool matrix)
+static void set_colors(void *object, struct color_ptr_array *partitions, 
+		       long color, struct node *nptr,
+		       const struct long_array *v1, const struct long_array *v2, bool matrix)
 {
      long n_colors, e1, e2;
-     color_p cptr;
+     struct color *cptr;
      bool added;
 
      if (color < 0)
 	  fatal("Invalid color");
      if (partitions == NULL)
 	  fatal("Invalid pointer to partition");
-     n_colors = VEC_SIZE(*partitions);
+     n_colors = partitions->nr;
      if (n_colors == color) {
-	  e1 = VEC_GET(*v1, nptr->pos1);
-	  e2 = VEC_GET(*v2, nptr->pos2);
+	  e1 = v1->data[nptr->pos1];
+	  e2 = v2->data[nptr->pos2];
 	  cptr = new_color(color, 0.0, 0.0, nptr->sim, nptr->id, e1, e2);
-	  VEC_PUSH(color_p, *partitions, cptr);
+	  ARRAY_PUSH(*partitions, cptr);
 	  nptr->cp = cptr;
      } else if (n_colors > color) {
-	  cptr = VEC_GET(*partitions, color);
-	  VEC_PUSH(long, cptr->id_nodes, nptr->id);
+	  cptr = partitions->data[color];
+	  ARRAY_PUSH(cptr->id_nodes, nptr->id);
 
-	  e1 = VEC_GET(*v1, nptr->pos1);
+	  e1 = v1->data[nptr->pos1];
 	  added = add_if_not_contains(&cptr->entities1, e1);
 	  if (added)
 	       cptr->sim_entity_1 = compute_pairwise_sim(object, &cptr->entities1, matrix);
 
-	  e2 = VEC_GET(*v2, nptr->pos2);
+	  e2 = v2->data[nptr->pos2];
 	  added = add_if_not_contains(&cptr->entities2, e2);
 	  if (added)
 	       cptr->sim_entity_2 = compute_pairwise_sim(object, &cptr->entities2, matrix);
@@ -839,30 +826,33 @@ static void set_colors(void *object, VEC(color_p) *partitions, long color, node_
      }
 }
 
-static void coloring(void *object, const graph_t *g, const VEC(node_p) *nodes,
-		     VEC(color_p) *partitions, const VEC(long) *v1, const VEC(long) *v2, bool matrix)
+static void coloring(void *object, const struct graph *g, 
+		     const struct node_ptr_array *nodes,
+		     struct color_ptr_array *partitions, 
+		     const struct long_array *v1, 
+		     const struct long_array *v2, bool matrix)
 {
-     color_p cptr;
-     node_p nptr;
+     struct color *cptr;
+     struct node *nptr;
      long colored_nodes, new_node, e1, e2, color;
-     VEC(long) free_colors;
      pqueue_t pq_saturation;
-
+     struct long_array free_colors = {0, 0, NULL};
+     
      colored_nodes = 0;
-     VEC_INIT_N(long, free_colors, g->n_nodes);
+     ALLOC_GROW(free_colors.data, (unsigned)g->n_nodes, free_colors.alloc);
      pq_init(&pq_saturation);
      init_saturation_pq(g, &pq_saturation);
 
-     if (VEC_SIZE(*partitions) == 0)  {
+     if (partitions->nr == 0)  {
 	  new_node = greatest_saturation_node(g, &pq_saturation, nodes);
 	  if (new_node == NONODE)
 	       fatal("Error getting the greatest saturation node");
-	  nptr = VEC_GET(*nodes, new_node);
-	  e1 = VEC_GET(*v1, nptr->pos1);
-	  e2 = VEC_GET(*v2, nptr->pos2);
+	  nptr = nodes->data[new_node];
+	  e1 = v1->data[nptr->pos1];
+	  e2 = v2->data[nptr->pos2];
 	  assert(new_node == nptr->id);
 	  cptr = new_color(0, 0.0, 0.0, nptr->sim, nptr->id, e1, e2);
-	  VEC_PUSH(color_p, *partitions, cptr);
+	  ARRAY_PUSH(*partitions, cptr);
 	  nptr->cp = cptr;
 	  colored_nodes++;
 	  if (pq_saturation.size != 0)
@@ -873,9 +863,9 @@ static void coloring(void *object, const graph_t *g, const VEC(node_p) *nodes,
 	  new_node = greatest_saturation_node(g, &pq_saturation, nodes);
 	  if (new_node == NONODE)
 	       fatal("Error getting the greatest saturation node");
-	  nptr = VEC_GET(*nodes, new_node);
+	  nptr = nodes->data[new_node];
 	  assert(new_node == nptr->id);
-	  VEC_CLEAR(free_colors);
+	  free_colors.nr = 0;
 	  get_free_colors(g, nodes, new_node, &free_colors, partitions);
 #ifdef PRGDEBUG
 	  print_vec_long(&free_colors);
@@ -888,50 +878,66 @@ static void coloring(void *object, const graph_t *g, const VEC(node_p) *nodes,
      }
      assert(pq_saturation.size == 0);
      pq_delete(&pq_saturation);
-     VEC_DESTROY(free_colors);
+     free(free_colors.data);
 }
 
 #ifdef PRGDEBUG
-static void print_coloring(VEC(color_p) *partitions)
+static void print_coloring(struct color_ptr_array *partitions)
 {
-     color_p c;
-     for (unsigned i = 0; i < VEC_SIZE(*partitions); i++) {
-	  c = VEC_GET(*partitions, i);
+     struct color *c;
+     for (unsigned i = 0; i < partitions->nr; i++) {
+	  c = partitions->data[i];
 	  assert(c->id == i);
-	  printf("%ld %.4f %.4f %.4f %zu %zu %zu\n", c->id, c->sim_entity_1, c->sim_entity_2, c->sim_between, VEC_SIZE(c->id_nodes), VEC_SIZE(c->entities1), VEC_SIZE(c->entities2));
+	  printf("%ld %.4f %.4f %.4f %zu %zu %zu\n", 
+		 c->id, c->sim_entity_1, c->sim_entity_2, c->sim_between, 
+		 c->id_nodes.nr, c->entities1.nr, c->entities2.nr);
      }
 }
 #endif
 
-static double get_density_average(VEC(color_p) *partitions)
+static double get_density_average(struct color_ptr_array *partitions)
 {
-     return density_total(partitions) / VEC_SIZE(*partitions);
-}
+     long i, n_colors;
+     double dt;
+     struct color *c;
+
+     dt = 0.0;
+     n_colors = partitions->nr;
+     
+     for (i = 0; i < n_colors; i++) {
+	  c = partitions->data[i];
+	  dt += (get_partition_similarity(c)/3.0);;
+     }
+     assert(dt/n_colors <= 1.0);
+     return dt / partitions->nr;
+ }
 
 /*************************************
  *************************************
  **
- **  Predited Links
+ **  Get Predited Links
  **
  ************************************
  ************************************/
 
-static void init_prediction_array(prediction_array_t *a, unsigned n)
+static void init_prediction_array(prediction_partition_t *a, unsigned n)
 {
-     unsigned i;
-
+     a->pred = xmalloc(n * sizeof(*(a->pred)));
+     for (unsigned i = 0; i < n; i++) {
+	  a->pred[i].alloc = 0;
+	  a->pred[i].nr = 0;
+	  a->pred[i].data = NULL; 
+     }
      a->nr = n;
-     a->pred = (VEC(prediction_t) *)xcalloc(n, sizeof(VEC(prediction_t)));
-     for (i = 0; i < n; i++)
-	  VEC_INIT(prediction_t, a->pred[i]);
 }
 
-static void free_prediction_array(prediction_array_t *a)
+static void free_prediction_array(prediction_partition_t *a)
 {
-     unsigned i;
-
-     for (i = 0; i < a->nr; i++)
-	  VEC_DESTROY(a->pred[i]);
+     for (unsigned i = 0; i < a->nr; i++) {
+	  free(a->pred[i].data);
+	  a->pred[i].nr = 0;
+	  a->pred[i].alloc = 0;
+     }
      free(a->pred);
 }
 
@@ -949,41 +955,41 @@ static void free_hash_map_item(struct hash_map *hmap)
      hmap_destroy(hmap);
 }
 
-static inline double get_cluster_probability(long nodes1, long nodes2, long n_edges)
+static double get_cluster_probability(long nodes1, long nodes2, long n_edges)
 {
-     double n_nodes = nodes1*nodes2;
+     long n_nodes = nodes1 * nodes2;
      if (n_nodes == 0)
 	  fatal("Zero Division");
-     return n_edges / n_nodes;
+     return (double)n_edges / n_nodes;
 }
 
-static void get_predicted_links(prediction_array_t *cluster_pred,
-				VEC(node_p) *color_nodes, VEC(color_p) *partitions,
-				const VEC(long) *v1, const VEC(long) *v2)
+static void get_predicted_links(prediction_partition_t *cluster_pred,
+				struct node_ptr_array *color_nodes,
+				struct color_ptr_array *partitions,
+				const struct long_array *v1, const struct long_array *v2)
 {
      unsigned i, j, k, n_links, m, n, n_clusters;
-     struct hash_map edges_obs[VEC_SIZE(*partitions)];
+     struct hash_map edges_obs[partitions->nr];
      struct hash_entry *hentry;
      char *buf;
      item_entry_t *item;
      int l;
-     node_p edge;
-     color_p cluster;
+     struct node *edge;
+     struct color *cluster;
      long node1, node2;
      prediction_t ptemp;
-     long n_edges[VEC_SIZE(*partitions)];
+     long n_edges[partitions->nr];
      double prob;
 
-     n_clusters = VEC_SIZE(*partitions);
-     n_links = VEC_SIZE(*color_nodes);
+     n_clusters = partitions->nr;
+     n_links = color_nodes->nr;
      for (i = 0; i < n_clusters; i++) {
 	  hmap_create(&edges_obs[i], n_links);
 	  n_edges[i] = 0;
      }
-
      for (i = 0; i < n_links; i++) {
-	  edge = VEC_GET(*color_nodes, i);
-	  l = asprintf(&buf, "%ld-%ld", VEC_GET(*v1, edge->pos1), VEC_GET(*v2, edge->pos2));
+	  edge = color_nodes->data[i];
+	  l = asprintf(&buf, "%ld-%ld", v1->data[edge->pos1], v2->data[edge->pos2]);
 	  if (l == -1)
 	       fatal("Error in edge key creation");
 	  assert((unsigned)l == strlen(buf));
@@ -996,15 +1002,15 @@ static void get_predicted_links(prediction_array_t *cluster_pred,
      }
 
      for (i = 0; i < n_clusters; i++) {
-	  cluster = VEC_GET(*partitions, i);
-	  n = VEC_SIZE(cluster->entities1);
-	  m = VEC_SIZE(cluster->entities2);
+	  cluster = partitions->data[i];
+	  n = cluster->entities1.nr;
+	  m = cluster->entities2.nr;
 	  prob = get_cluster_probability(n, m, n_edges[i]);
 	  assert((prob >= 0.0) && (prob <= 1.0));
 	  for (j = 0; j < n; j++) {
-	       node1 = VEC_GET(cluster->entities1, j);
+	       node1 = cluster->entities1.data[j];
 	       for (k = 0; k < m; k++) {
-		    node2 = VEC_GET(cluster->entities2, k);
+		    node2 = cluster->entities2.data[k];
 		    l = asprintf(&buf, "%ld-%ld",node1, node2);
 		    if (l == -1)
 			 fatal("Error in make a new link");
@@ -1014,7 +1020,7 @@ static void get_predicted_links(prediction_array_t *cluster_pred,
 			 ptemp.entity1 = node1;
 			 ptemp.entity2 = node2;
 			 ptemp.prob = prob;
-			 VEC_PUSH(prediction_t, cluster_pred->pred[i], ptemp);
+			 ARRAY_PUSH(cluster_pred->pred[i], ptemp);
 		    }
 		    free(buf);
 	       }
@@ -1024,7 +1030,7 @@ static void get_predicted_links(prediction_array_t *cluster_pred,
 	  free_hash_map_item(&edges_obs[i]);
 }
 
-static void print_predicted_links(prediction_array_t *cluster_pred,
+static void print_predicted_links(prediction_partition_t *cluster_pred,
 				  double threshold_E1, double threshold_E2,
 				  const char name1[], const char name2[], char **desc)
 {
@@ -1043,13 +1049,13 @@ static void print_predicted_links(prediction_array_t *cluster_pred,
 	  fatal("No descriptor file specified, abort\n");
 
      for (i = 0; i < cluster_pred->nr; i++) {
-	  n = VEC_SIZE(cluster_pred->pred[i]);
+	  n = cluster_pred->pred[i].nr;
 	  if (n > 0) {
 	       fprintf(f, "Cluster\t%u\n", i);
 	       cont += n;
 	  }
 	  for (j = 0; j < n; j++) {
-	       ptemp = VEC_GET(cluster_pred->pred[i], j);
+	       ptemp = cluster_pred->pred[i].data[j];
 	       fprintf(f, "%s\t%s\t%.4f\n", desc[ptemp.entity1], desc[ptemp.entity2], ptemp.prob);
 	  }
      }
@@ -1065,22 +1071,23 @@ static void print_predicted_links(prediction_array_t *cluster_pred,
  ************************************
  ************************************/
 
-static unsigned print_singleton(FILE *f, bool *in_v, const VEC(long) *v, char **desc)
+static unsigned print_singleton(FILE *f, bool *in_v, const struct long_array *v, char **desc)
 {
      unsigned i, n;
      
      n = 0;
-     for (i = 0; i < VEC_SIZE(*v); i++) {
+     for (i = 0; i < v->nr; i++) {
 	  if (!in_v[i]) {
-	       fprintf(f ,"%s\n", desc[VEC_GET(*v, i)]);
+	       fprintf(f ,"%s\n", desc[v->data[i]]);
 	       n++;
 	  }
      }
      return n;
 }
 
-static char *print_output_files(VEC(node_p) *color_nodes, VEC(color_p) *partitions,
-				const VEC(long) *v1, const VEC(long) *v2,
+static char *print_output_files(struct node_ptr_array *color_nodes,
+				struct color_ptr_array *partitions,
+				const struct long_array *v1, const struct long_array *v2,
 				double threshold_E1, double threshold_E2,
 				const char name1[], const char name2[], char **desc)
 {
@@ -1088,8 +1095,8 @@ static char *print_output_files(VEC(node_p) *color_nodes, VEC(color_p) *partitio
      unsigned i, j, n, m;
      char *output1, *output2, *message;
      struct stat st;
-     node_p edge;
-     color_p cluster;
+     struct node *edge;
+     struct color *cluster;
      long id_node;
      bool *in_v1, *in_v2; 
 
@@ -1107,18 +1114,18 @@ static char *print_output_files(VEC(node_p) *color_nodes, VEC(color_p) *partitio
      f = fopen(output2, "w");
      free(output2);
 
-     in_v1 = (bool *)xcalloc(VEC_SIZE(*v1), sizeof(bool));
-     memset(in_v1, false, VEC_SIZE(*v1)*sizeof(bool));
-     in_v2 = (bool *)xcalloc(VEC_SIZE(*v2), sizeof(bool));
-     memset(in_v2, false, VEC_SIZE(*v2)*sizeof(bool));
+     in_v1 = (bool *)xcalloc(v1->nr, sizeof(bool));
+     memset(in_v1, false, v1->nr*sizeof(bool));
+     in_v2 = (bool *)xcalloc(v2->nr, sizeof(bool));
+     memset(in_v2, false, v2->nr*sizeof(bool));
 
      if (!f)
 	  fatal("No descriptor file specified, abort\n");
-     for (i = 0; i < VEC_SIZE(*color_nodes); i++) {
-	  edge = VEC_GET(*color_nodes, i);
-	  /*assert(edge->id == i);*/
-	  fprintf(f ,"%s\t%s\t%.4f\n", desc[VEC_GET(*v1, edge->pos1)],
-		  desc[VEC_GET(*v2, edge->pos2)], edge->sim);
+     for (i = 0; i < color_nodes->nr; i++) {
+	  edge = color_nodes->data[i];
+	  fprintf(f ,"%s\t%s\t%.4f\n", 
+		  desc[v1->data[edge->pos1]],
+		  desc[v2->data[edge->pos2]], edge->sim);
 	  in_v1[edge->pos1] = true;
 	  in_v2[edge->pos2] = true;
      }
@@ -1126,22 +1133,22 @@ static char *print_output_files(VEC(node_p) *color_nodes, VEC(color_p) *partitio
      m = print_singleton(f, in_v2, v2, desc);
      fclose(f);
 
-     printf("Number of partitions: %zu\n", VEC_SIZE(*partitions));
-     for (i = 0; i< VEC_SIZE(*partitions); i++) {
-	  cluster = VEC_GET(*partitions, i);
-	  /* assert(cluster->id == i); */
+     printf("Number of partitions: %u\n", partitions->nr);
+     for (i = 0; i < partitions->nr; i++) {
+	  cluster = partitions->data[i];
 	  if (asprintf(&output2, "%s/%s-%s-%u-%.4f-%.4f.txt",
 		       output1, name1, name2, i, threshold_E1, threshold_E2) == -1)
 	       fatal("Error in cluster file");
           f = fopen(output2, "w");
 	  if (!f)
 	       fatal("No descriptor file specified, abort\n");
-	  for (j = 0; j < VEC_SIZE(cluster->id_nodes); j++) {
-	       id_node = VEC_GET(cluster->id_nodes, j);
-	       edge = VEC_GET(*color_nodes, id_node);
+	  for (j = 0; j < cluster->id_nodes.nr; j++) {
+	       id_node = cluster->id_nodes.data[j];
+	       edge = color_nodes->data[id_node];
 	       assert(cluster->id == edge->cp->id);
-	       fprintf(f ,"%s\t%s\t%.4f\n", desc[VEC_GET(*v1, edge->pos1)],
-		       desc[VEC_GET(*v2, edge->pos2)], edge->sim);
+	       fprintf(f ,"%s\t%s\t%.4f\n", 
+		       desc[v1->data[edge->pos1]],
+		       desc[v2->data[edge->pos2]], edge->sim);
 	  }
 	  fclose(f);
 	  free(output2);
@@ -1176,25 +1183,25 @@ static char *print_output_files(VEC(node_p) *color_nodes, VEC(color_p) *partitio
  ************************************/
 
 double annotation_partition(void *object, long n_nodes,
-			    const VEC(long) *v1, const VEC(long) *v2,
+			    const struct long_array *v1, const struct long_array *v2,
 			    double threshold_E1, double threshold_E2,
 			    double threshold_bt, const char name1[], const char name2[],
 			    char **desc, bool prediction, bool matrix, enum measure d)
 {
-     graph_t gc;
+     struct graph gc;
      bool *in_term1, *in_term2;
-     VEC(node_p) color_nodes;
-     VEC(color_p) partitions;
-     unsigned i, n;
-     prediction_array_t cluster_pred;
+     unsigned i;
      double **sim_mat, **simM1, **simM2;
-     graph_t *g;
+     struct graph *g;
      clock_t ti, tf;
      struct lpairs nd1, nd2;
      long max_depth;
      char *message;
      double sim;
-     
+     prediction_partition_t cluster_pred;
+     struct color_ptr_array partitions = {0, 0, NULL};
+     struct node_ptr_array color_nodes = {0, 0, NULL};
+ 
      ti = clock();
      sim_mat = NULL;
      simM1 = NULL;
@@ -1204,9 +1211,7 @@ double annotation_partition(void *object, long n_nodes,
      if (matrix) {
 	  sim_mat = (double **)object;
      } else {
-	  n = 2*VEC_SIZE(*v1)*VEC_SIZE(*v2);
-	  hmap_create(&sim_map, n);
-	  g = (graph_t *)object;
+	  g = (struct graph *)object;
 	  init_metric_data(g);
 	  if (d == DTAX) {
 	       metricPtr = &sim_dtax;
@@ -1226,14 +1231,13 @@ double annotation_partition(void *object, long n_nodes,
 	  simM1 = similarity_between_all(g, v1);
 	  simM2 = similarity_between_all(g, v2);
      }
-     VEC_INIT(color_p, partitions);
+     
      in_term1 = nodes_in_the_term(v1, n_nodes);
      in_term2 = nodes_in_the_term(v2, n_nodes);
-     VEC_INIT(node_p, color_nodes);
      compute_color_nodes(object, v1, v2, &color_nodes, threshold_bt, in_term1, in_term2, matrix);
      free(in_term1);
      free(in_term2);
-     init_graph(&gc, VEC_SIZE(color_nodes));
+     init_graph(&gc, color_nodes.nr);
      if (matrix) {
 	  build_graph_to_coloring_matrix(&gc, &color_nodes, sim_mat, v1, v2, threshold_E1, threshold_E2);
      } else {
@@ -1242,13 +1246,13 @@ double annotation_partition(void *object, long n_nodes,
 	  free_double_matrix(simM2, 0, 0);
      }
      tf = clock();
-     printf("Bipartite Graph data - Nodes A: %zu; Nodes B: %zu; Edges: %zu\n",
-	    VEC_SIZE(*v1), VEC_SIZE(*v2), VEC_SIZE(color_nodes));
+     printf("Bipartite Graph data - Nodes A: %u; Nodes B: %u; Edges: %u\n",
+	    v1->nr, v2->nr, color_nodes.nr);
      printf("Time to build the graph to coloring: %.3f secs\n", (double)(tf-ti)/CLOCKS_PER_SEC);
 #ifdef PRGDEBUG
      print_graph(&gc);
 #endif
-     printf("Graph to Colorinng - Nodes: %ld; Edges: %ld\n", gc.n_nodes, gc.n_edges/2);
+     printf("Graph to Coloring - Nodes: %ld; Edges: %ld\n", gc.n_nodes, gc.n_edges/2);
      ti = clock();
      if (gc.n_nodes != 0) {
 	  coloring(object, &gc, &color_nodes, &partitions, v1, v2, matrix);
@@ -1261,10 +1265,11 @@ double annotation_partition(void *object, long n_nodes,
      }
      tf = clock();
      printf("Coloring solver time %.3f secs\n", (double)(tf-ti)/CLOCKS_PER_SEC);
-     message = print_output_files(&color_nodes, &partitions, v1, v2, threshold_E1, threshold_E2, name1, name2, desc);
+     message = print_output_files(&color_nodes, &partitions, v1, v2, 
+				  threshold_E1, threshold_E2, name1, name2, desc);
      printf("%s", message);
      if (prediction) {
-	  init_prediction_array(&cluster_pred, VEC_SIZE(partitions));
+	  init_prediction_array(&cluster_pred, partitions.nr);
 	  get_predicted_links(&cluster_pred, &color_nodes, &partitions, v1, v2);
 	  print_predicted_links(&cluster_pred, threshold_E1, threshold_E2, name1, name2, desc);
 	  free_prediction_array(&cluster_pred);
@@ -1276,15 +1281,14 @@ double annotation_partition(void *object, long n_nodes,
      free(message);
      if (!matrix) {
 	  free_metric();
-	  free_hash_map_item(&sim_map);
      }
-     for (i = 0; i < VEC_SIZE(partitions); i++)
-	  free_color(VEC_GET(partitions, i));
-     VEC_DESTROY(partitions);
-     for (i = 0; i < VEC_SIZE(color_nodes); i++)
-	  free(VEC_GET(color_nodes, i));
-     VEC_DESTROY(color_nodes);
+     for (i = 0; i < partitions.nr; i++)
+	  free_color(partitions.data[i]);
+     free(partitions.data);
+     for (i = 0; i < color_nodes.nr; i++)
+	  free(color_nodes.data[i]);
+     free(color_nodes.data);
      free_graph(&gc);
-     
+
      return sim;
 }

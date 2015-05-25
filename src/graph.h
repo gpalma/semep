@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012, Universidad Simón Bolívar
+ * Copyright (C) 2012, 2015 Universidad Simón Bolívar
  *
  * @brief Implementation of Abstract Data Type Graph how adjacents list
  * Copying: GNU GENERAL PUBLIC LICENSE Version 2
@@ -37,8 +37,6 @@ struct graph {
   /* Private variable */
   struct edge_list *_tmp;
 };
-
-typedef struct graph graph_t;
 
 typedef int (*edge_cost_fn_t)(const struct edge *);
 
@@ -131,7 +129,7 @@ bool detect_cycle(const struct graph *g);
 
 bool *get_spanning_tree(const struct graph *g);
 
-VEC(long) *get_euler_tour(const struct graph *g);
+struct long_array *get_euler_tour(const struct graph *g);
 
 bool find_edge(struct graph *g, long v1, long v2);
 

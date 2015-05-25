@@ -1,5 +1,5 @@
 /**
- * Copyright 2010 (C), Universidad Simon Bolivar
+ * Copyright 2010, 2015 (C), Universidad Simon Bolivar
  *
  * @brief Generic hash table
  * Copying: GNU GENERAL PUBLIC LICENSE Version 2
@@ -343,7 +343,12 @@ static void rehash(struct hash_map *h)
     hlist_for_each_safe(list,pos, &all_entry){
       hentry = hlist_entry(list, struct hash_entry, head);
       hlist_del_init(&hentry->head);
-      h_list = &h->table[hentry->hash%h->buckets];
+      if (h->buckets > 0) {
+	   h_list = &h->table[hentry->hash%h->buckets];
+      } else {
+	   fprintf(stderr,"Error in the number of buckets\n");
+	   exit(1);
+      }
       hlist_add_head(&hentry->head, h_list);
       h->fill++;
     }
@@ -381,7 +386,12 @@ static void rehash_int(struct hash_map *h)
     hlist_for_each_safe(list,pos, &all_entry){
       hentry = hlist_entry(list, struct hash_item, head);
       hlist_del_init(&hentry->head);
-      h_list = &h->table[hentry->hash%h->buckets];
+      if (h->buckets > 0) {
+	   h_list = &h->table[hentry->hash%h->buckets];
+      } else {
+	   fprintf(stderr,"Error in the number of buckets\n");
+	   exit(1);
+      }
       hlist_add_head(&hentry->head, h_list);
       h->fill++;
     }

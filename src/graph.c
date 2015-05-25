@@ -101,30 +101,29 @@ extern void add_arc_to_graph(struct graph *g, long id, long from, long to, long 
 void add_reprensentative_ancestor(struct graph *g)
 {
      unsigned long i, n;
-     VEC(long) zdegree;
+     struct long_array zdegree = {0, 0, NULL};
 
-     n = g->n_nodes+1;
-     VEC_INIT(long, zdegree);
-     for (i = 1; i < n; i++) {
-	  if (g->degree[i].din == 0) {
-	       VEC_PUSH(long, zdegree, i);
-	  }
-     }
-     if (VEC_SIZE(zdegree) > 1) {
-	  g->n_nodes++;
+     n = g->n_nodes;
+     if (g->degree[0].din != 0)
+	  fatal("The root no has in-degree equal to zero\n");
+  
+     for (i = 1; i < n; i++) 
+	  if (g->degree[i].din == 0) 
+	       ARRAY_PUSH(zdegree, i);
+     
+     if (zdegree.nr > 0) {
 #ifdef PRGDEBUG
-	  printf("\n ** DAG with %zu roots ** \n", VEC_SIZE(zdegree));
+	  printf("\n ** Graph with %ld nodos with in-degree zero ** \n", zdegree.nr);
 #endif
-	  for (i = 0; i < VEC_SIZE(zdegree); i++) {
-	       add_arc_to_graph(g, g->n_edges, ROOT, VEC_GET(zdegree, i), COST);
-	  }
+	  for (i = 0; i < zdegree.nr; i++) 
+	       add_arc_to_graph(g, g->n_edges, ROOT, zdegree.data[i], COST);
      }
 #ifdef PRGDEBUG
      else {
 	  printf("\n ** DAG with one root ** \n");
      }
 #endif
-     VEC_DESTROY(zdegree);
+     free(zdegree.data);
 }
 
 void print_graph(const struct graph *g)
@@ -911,7 +910,7 @@ bool *get_spanning_tree(const struct graph *g)
 }
 
 static void dfs_euler_tour(const struct graph *g, color_e *color,
-			   long v, VEC(long) *et)
+			   long v, struct long_array *et)
 {
      long u;
      struct edge_list *etmp;
@@ -921,10 +920,10 @@ static void dfs_euler_tour(const struct graph *g, color_e *color,
 	  u = etmp->item.to;
 	  if (color[u] == WHITE) {
 	       printf("depth %ld\n", u);
-	       VEC_PUSH(long, *et, u);
+	       ARRAY_PUSH(*et, u);
 	       dfs_euler_tour(g, color, u, et);
 	       printf("bt %ld\n", v);
-	       VEC_PUSH(long, *et, v);
+	       ARRAY_PUSH(*et, v);
 	  }
      }
 }
@@ -932,15 +931,15 @@ static void dfs_euler_tour(const struct graph *g, color_e *color,
 /**
  * Return a vector with the edges of the euler tour
  */
-VEC(long) *get_euler_tour(const struct graph *g)
+
+struct long_array *get_euler_tour(const struct graph *g)
 {
      long i, n;
      color_e *color;
-     VEC(long) *etour;
+     struct long_array *etour;
 
-     etour = (VEC(long) *)xmalloc(sizeof(VEC(long)));
+     ALLOC_STRUCT(etour);
      n = g->n_nodes;
-     VEC_INIT(long, *etour);
      color = (color_e *)xmalloc(n*sizeof(color_e));
 
      for (i = 0; i < n; i++) {
@@ -949,10 +948,11 @@ VEC(long) *get_euler_tour(const struct graph *g)
      for (i = ROOT; i < n; i++) {
 	  if (color[i] == WHITE) {
 	       printf("init add %ld\n", i);
-	       VEC_PUSH(long, *etour, i);
+	       ARRAY_PUSH(*etour, i);
 	       dfs_euler_tour(g, color, i, etour);
 	  }
      }
      free(color);
      return etour;
 }
+
