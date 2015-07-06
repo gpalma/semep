@@ -1,0 +1,63 @@
+62
+AT1G16610	AT1G16610
+AT5G57090	AT5G57090
+AT3G01090	AT3G01090
+AT3G29160	AT3G29160
+AT5G08030	AT5G08030
+AT5G43300	AT5G43300
+AT3G02040	AT3G02040
+GO:0000152	nuclear ubiquitin ligase complex
+GO:0000166	nucleotide binding
+GO:0000323	lytic vacuole
+GO:0000398	mRNA splicing, via spliceosome
+GO:0003006	developmental process involved in reproduction
+GO:0003676	nucleic acid binding
+GO:0003723	RNA binding
+GO:0004672	protein kinase activity
+GO:0004674	protein serine/threonine kinase activity
+GO:0004713	protein tyrosine kinase activity
+GO:0005215	transporter activity
+GO:0005515	protein binding
+GO:0005524	ATP binding
+GO:0005634	nucleus
+GO:0005654	nucleoplasm
+GO:0005730	nucleolus
+GO:0005737	cytoplasm
+GO:0005886	plasma membrane
+GO:0006007	glucose catabolic process
+GO:0006071	glycerol metabolic process
+GO:0006468	protein phosphorylation
+GO:0006486	protein glycosylation
+GO:0006629	lipid metabolic process
+GO:0008081	phosphoric diester hydrolase activity
+GO:0008361	regulation of cell size
+GO:0008380	RNA splicing
+GO:0008889	glycerophosphodiester phosphodiesterase activity
+GO:0009536	plastid
+GO:0009594	detection of nutrient
+GO:0009637	response to blue light
+GO:0009640	photomorphogenesis
+GO:0009672	auxin:hydrogen symporter activity
+GO:0009723	response to ethylene stimulus
+GO:0009733	response to auxin stimulus
+GO:0009738	abscisic acid mediated signaling pathway
+GO:0009749	response to glucose stimulus
+GO:0009925	basal plasma membrane
+GO:0009926	auxin polar transport
+GO:0009958	positive gravitropism
+GO:0010050	vegetative phase change
+GO:0010182	sugar mediated signaling pathway
+GO:0010260	organ senescence
+GO:0010329	auxin efflux transmembrane transporter activity
+GO:0016021	integral to membrane
+GO:0016607	nuclear speck
+GO:0016772	transferase activity, transferring phosphorus-containing groups
+GO:0030643	cellular phosphate ion homeostasis
+GO:0043481	anthocyanin accumulation in tissues in response to UV light
+GO:0046685	response to arsenic-containing substance
+GO:0046686	response to cadmium ion
+GO:0046777	protein autophosphorylation
+GO:0048364	root development
+GO:0048443	stamen development
+GO:0055085	transmembrane transport
+GO:0080022	primary root development

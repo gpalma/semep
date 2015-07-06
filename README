@@ -1,16 +1,25 @@
 This a source code release of semEP.
-It has been tested on GNU/Linux and OS X.
+It has been tested on FreeBSD, GNU/Linux and OS X.
 
-semEP
-=====
-semEP is a community detection, and
-Link prediction solver.
+0) ABOUT
+=========
+semEP is a edge clustering and link prediction solver.
 
 1) LICENSE
 ===========
 GNU GENERAL PUBLIC LICENSE Version 2
 
-2) CONTENT
+2) AUTHORS
+============
+* Louiqa Raschid <louiqa@umiacs.umd.edu> (University of Maryland)
+  - Project design
+* Maria-Esther Vidal <mvidal@ldc.usb.ve> (Universidad Simón Bolívar)
+  - Project design
+* Guillermo Palma <gpalma@ldc.usb.ve> (Universidad Simón Bolívar)
+  - Project design
+  - Solver implementation
+  
+3) CONTENT
 ===========
 * Makefile: builds semEP.
 * LICENSE: GPL version 2.
@@ -27,12 +36,12 @@ GNU GENERAL PUBLIC LICENSE Version 2
 *  draw_semEP: Visualization tool for semEP output format.
 *  util: stats tools
 
-3) REQUIREMENTS
+4) REQUIREMENTS
 =================
 * GNU Colecction Compiler (GCC) or Clang
 * GNU make (make).
 
-4) INSTALLATION
+5) INSTALLATION
 =================
 Clean and generate necessary files
 
@@ -41,7 +50,7 @@ Clean and generate necessary files
 
 The executable file semEP is generated in the semep directory.
 
-5) USAGE
+6) USAGE
 ==========
 semEP has 9 command line options. Four are mandatory.
 Here, mandatory means that without specifying this
@@ -77,7 +86,7 @@ The default values of the options are:
 -s	    : 0.25
 -e  	    : "tax"
 
-6) RUNNING SOME SAMPLES
+7) RUNNING SOME SAMPLES
 =======================
 1) Compute the partitions between two genes using the default values:
 
@@ -99,11 +108,11 @@ $>./semEP -p -t 0.5 -r 0.6 -s 0.45 test/ncit/graphNCI.txt test/ncit/nci-term-des
 
 $>./semEP -m -p -t 0.2 -r 0.3 test/yamanishi/nr/sim_mat/Fold_1_Drugs-Fold_1_Targets.txt test/yamanishi/nr/nr_desc.txt test/yamanishi/nr/folds_drugs/Fold_1_Drugs.txt test/yamanishi/nr/folds_targets/Fold_1_Targets.txt
 
-7) semEP File Formats
+8) semEP File Formats
 ==========================
 The following explains the formats of the files used by semEP.
 
-7.1) Graph File Format
+8.1) Graph File Format
 ======================
 The graph of the ontology must be an Direct Acyclic Graph (DAG).
 The vertices of the graph are the identifiers of the terms of the ontology.
@@ -122,7 +131,7 @@ a source node, a  target node, and the cost of the arc:
 ..
 <<source nodeN>>[TAB]<<target nodeN>>[TAB]<<costN>>
 
-7.2) File format of the description of the terms
+8.2) File format of the description of the terms
 ================================================
 We have a file with the IDs of the terms of the ontology and its description
 The file format is as follows:
@@ -137,7 +146,7 @@ The file format is as follows:
 Note that the number of terms must be equal to the number of nodes of the graph,
 or the number of rows in the similarity matrix.
 
-7.3) Annotation File Format
+8.3) Annotation File Format
 ===========================
 The file format is as follows:
 
@@ -151,7 +160,7 @@ The file format is as follows:
 Where <<annotationX>> is the identifier of the annotation in the ontology or
 of the annotation used in the similarity matrix.
 
-7.4) Similarity matrix File Format
+8.4) Similarity matrix File Format
 ====================================
 Matrix contains the drug-drug similarities, target-target similarities,
 and drug-target values (1 if is a drug-target interaction, 0 otherwise).
@@ -164,7 +173,7 @@ of the description of the terms. The file format is as follows:
 ..
 <sim term-n term-1>[SPC]....[SPC]<sim term-n term-n>
 
-8) CONTACT
+9) CONTACT
 ============
 I hope you find semEP an useful tool. Please, let me know
 any comment, problem or suggestion.

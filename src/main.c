@@ -96,14 +96,16 @@ static void print_args(void)
      printf("Get predicted links: %s\n", g_args.prediction ? "true" : "false");
      printf("Matrix input: %s\n", g_args.matrix ? "true" : "false");
      printf("Get the description of the annotations: %s\n", g_args.description ? "true" : "false");
-     if (g_args.d == DTAX) {
-	  printf("Measure: d_tax\n");
-     } else if (g_args.d == DSTR) {
-	  printf("Measure: d^str_tax\n");
-     } else if (g_args.d == DPS) {
-	  printf("Measure: d_ps\n");
-     } else {
-	  fatal("Unknown measure");
+     if (g_args.matrix == false) {
+	  if (g_args.d == DTAX) {
+	       printf("Measure: d_tax\n");
+	  } else if (g_args.d == DSTR) {
+	       printf("Measure: d^str_tax\n");
+	  } else if (g_args.d == DPS) {
+	       printf("Measure: d_ps\n");
+	  } else {
+	       fatal("Unknown measure");
+	  }
      }
      printf("*************************************\n");
 }

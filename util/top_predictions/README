@@ -1,0 +1,38 @@
+GENERAL
+=======
+
+This software scans the semEP predictions
+and then saves them in a file in increasing order.
+If two predictions are repeated it takes the highest probability value.
+
+VERSION
+=======
+1.0
+
+LICENSE
+=========
+GNU GENERAL PUBLIC LICENSE Version 2
+
+USAGE
+======
+>get_top_predictions.py predictions_filename output_filename
+
+Where:
+ predictions_filename		File name with the semEP predictions.
+ output_filename		File name with the predictions in order.
+
+Example
+========
+Given the semEP output file group1_genes-group1_allGO-0.0200-0.2000-Pred.txt,
+we can get the file group1_genes-group1_allGO-0.0200-0.2000-Pred-inOrder.txt
+by running:
+
+./get_top_predictions.py group1_genes-group1_allGO-0.0200-0.2000-Pred.txt group1_genes-group1_allGO-0.0200-0.2000-Pred-inOrder.txt
+
+CONTACT
+=======
+Please, let me know any comment, problem or suggestion.
+
+Guillermo Palma
+http://www.ldc.usb.ve/~gpalma
+gpalma@.ldc.usb.ve

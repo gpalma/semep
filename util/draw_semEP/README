@@ -1,0 +1,66 @@
+GENERAL
+=======
+
+draw_semEP.py is a visualization tool for semEP output format based on
+Graphviz graph layout and the Python interface to the Graphviz called PyGraphviz.
+It has been tested on GNU/Linux and OS X.
+
+VERSION
+=======
+1.0.1
+
+LICENSE
+==========
+GNU GENERAL PUBLIC LICENSE Version 2
+
+REQUIREMENTS
+============
+1) Graphviz    (http://www.graphviz.org/)
+2) PyGraphviz  (pygraphviz.github.io/)
+
+USAGE
+======
+
+draw_semEP.py command synopsis:
+	draw_semEP.py [-h] [-o OUTPUT_FORMAT] [-p] [-g GO] input_filename
+
+positional arguments:
+  input_filename			File name of the bipartite graph that is the semEP output
+
+optional arguments:
+  -h, --help				show help message and exit
+  -o OUTPUT_FORMAT  	Output format. The formats actually available 
+			       	        are given by Graphviz system. 
+			      	        See http://www.graphviz.org/content/output-formats
+			      	       	This command is optional. The default output format is png.
+  -p					Print preditcted edges. The dashed edges are prediction. The
+  					red dashed edges are new prediction and the green dashed 
+					edges are prediction but the edges are in bipartite graph
+					of the input.
+  -g GO             			Gene Onlology file
+
+
+RUNNING SOME SAMPLES
+====================
+
+1) Given the semEP output file ACT-1-ACT-2-0.2500-0.2500.txt and the
+folder with of partitions ACT-1-ACT-2-0.2500-0.2500-Subgr. We can get png files
+of the bipartite graph, and of the partitions, by running: 
+
+>./draw_semEP.py ACT-1-ACT-2-0.2500-0.2500.txt
+
+2) We can get jpg files and the predictions by running:
+
+>./draw_semEP.py -p -o jpg AtVHA-A-AtVHA-C-0.2500-0.2500.txt
+
+3) We can get the evidence code for bipartite graph with genes and GO terms
+
+>./draw_semEP.py -o jpg -g ATH_GO_GOSLIM.txt group1_genes-group1_allGO-0.0050-0.3000.txt
+
+CONTACT
+=======
+Please, let me know any comment, problem or suggestion.
+
+Guillermo Palma
+http://www.ldc.usb.ve/~gpalma
+gpalma@ldc.usb.ve

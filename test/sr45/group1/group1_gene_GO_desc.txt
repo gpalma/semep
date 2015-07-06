@@ -1,0 +1,44 @@
+43
+AT1G16610	AT1G16610
+AT1G06220	AT1G06220
+AT3G49430	AT3G49430
+AT2G43770	AT2G43770
+AT1G10580	AT1G10580
+AT1G55310	AT1G55310
+AT1G02840	AT1G02840
+AT1G23860	AT1G23860
+GO:0000166	nucleotide binding
+GO:0000278	mitotic cell cycle
+GO:0000398	mRNA splicing, via spliceosome
+GO:0000956	nuclear-transcribed mRNA catabolic process
+GO:0003676	nucleic acid binding
+GO:0003723	RNA binding
+GO:0003746	translation elongation factor activity
+GO:0003924	GTPase activity
+GO:0005515	protein binding
+GO:0005525	GTP binding
+GO:0005618	cell wall
+GO:0005634	nucleus
+GO:0005654	nucleoplasm
+GO:0005730	nucleolus
+GO:0005737	cytoplasm
+GO:0005829	cytosol
+GO:0005834	heterotrimeric G-protein complex
+GO:0005886	plasma membrane
+GO:0006355	regulation of transcription, DNA-dependent
+GO:0006396	RNA processing
+GO:0008135	translation factor activity, nucleic acid binding
+GO:0008150	biological_process
+GO:0008380	RNA splicing
+GO:0009793	embryo development ending in seed dormancy
+GO:0010182	sugar mediated signaling pathway
+GO:0016607	nuclear speck
+GO:0030422	production of siRNA involved in RNA interference
+GO:0035061	interchromatin granule
+GO:0035196	production of miRNAs involved in gene silencing by miRNA
+GO:0042802	identical protein binding
+GO:0043687	post-translational protein modification
+GO:0045694	regulation of embryo sac egg cell differentiation
+GO:0045893	positive regulation of transcription, DNA-dependent
+GO:0048573	photoperiodism, flowering
+GO:0080008	CUL4-RING ubiquitin ligase complex
