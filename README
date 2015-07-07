@@ -1,23 +1,13 @@
 This a source code release of semEP.
-It has been tested on FreeBSD, GNU/Linux and OS X.
+It has been tested on FreeBSD, GNU/Linux, and OS X.
 
-0) ABOUT
+1) ABOUT
 =========
 semEP is a edge clustering and link prediction solver.
 
-1) LICENSE
+2) LICENSE
 ===========
-GNU GENERAL PUBLIC LICENSE Version 2
-
-2) AUTHORS
-============
-* Louiqa Raschid <louiqa@umiacs.umd.edu> (University of Maryland)
-  - Project design
-* Maria-Esther Vidal <mvidal@ldc.usb.ve> (Universidad Simón Bolívar)
-  - Project design
-* Guillermo Palma <gpalma@ldc.usb.ve> (Universidad Simón Bolívar)
-  - Project design
-  - Solver implementation
+GNU GENERAL PUBLIC LICENSE Version 2.
   
 3) CONTENT
 ===========
@@ -38,12 +28,12 @@ GNU GENERAL PUBLIC LICENSE Version 2
 
 4) REQUIREMENTS
 =================
-* GNU Colecction Compiler (GCC) or Clang
+* GNU Colecction Compiler (GCC) or Clang.
 * GNU make (make).
 
 5) INSTALLATION
 =================
-Clean and generate necessary files
+Clean and generate necessary files:
 
    $>make clean
    $>make
