@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012, 2013 Universidad Simón Bolívar
+ * Copyright (C) 2012-2015 Universidad Simón Bolívar
  *
  * Copying: GNU GENERAL PUBLIC LICENSE Version 2
  * @author Guillermo Palma <gpalma@ldc.usb.ve>
@@ -32,30 +32,25 @@
     (b) = __tmp;				\
   } while (0)
 
-#define ABS(val)      ((val) < 0 ? -(val):(val))
+#define init_struct_array(a)			\
+     do { (a).nr = 0;				\
+	  (a).alloc = 0;			\
+	  (a).data = NULL;			\
+     } while (0)
 
-#define ISEVEN(x)     (!((x)&0x01))
+#define free_array(a)				\
+     do { (a).nr = 0;				\
+	  (a).alloc = 0;			\
+	  if ((a).data)				\
+	       free((a).data);			\
+     } while (0)
 
 void fatal(const char *msg, ...);
 
 int error(const char *msg, ...);
 
-int **int_matrix(long nrl, long nrh, long ncl, long nch);
+double **double_matrix(int nrl, int nrh, int ncl, int nch);
 
-void free_int_matrix(int **m, long nrl, long ncl);
-
-long **long_matrix(long nrl, long nrh, long ncl, long nch);
-
-void free_long_matrix(long **m, long nrl, long ncl);
-
-char *ltostr(char *buf, long number, size_t digits);
-
-long number_digits(long n);
-
-char **new_cmatrix(long n, long m);
-
-double **double_matrix(long nrl, long nrh, long ncl, long nch);
-
-void free_double_matrix(double **m, long nrl, long ncl);
+void free_double_matrix(double **m, int nrl, int ncl);
 
 #endif /* ___UTIL_H */

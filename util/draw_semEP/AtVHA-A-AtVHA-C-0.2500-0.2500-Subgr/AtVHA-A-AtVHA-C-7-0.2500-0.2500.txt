@@ -1,7 +1,0 @@
-proteasomal protein catabolic process	glucose catabolic process	0.4667
-proteasomal protein catabolic process	regulation of carbohydrate biosynthetic process	0.3636
-proteasomal protein catabolic process	carbohydrate biosynthetic process	0.4545
-proteasomal protein catabolic process	ubiquitin-dependent protein catabolic process	0.7857
-proteasomal protein catabolic process	lignin biosynthetic process	0.3846
-proteasomal protein catabolic process	photorespiration	0.3333
-proteasomal protein catabolic process	cellulose metabolic process	0.4286

@@ -1,8 +1,0 @@
-response to salt stress	response to salt stress	1.0000
-response to salt stress	response to misfolded protein	0.6000
-hyperosmotic response	response to salt stress	0.8000
-hyperosmotic response	response to misfolded protein	0.6000
-response to cadmium ion	response to salt stress	0.3636
-response to cadmium ion	response to misfolded protein	0.4545
-response to temperature stimulus	response to salt stress	0.6667
-response to temperature stimulus	response to misfolded protein	0.4444

@@ -1,3 +1,0 @@
-pollen development	Golgi vesicle transport	0.3333
-pollen development	Golgi organization	0.3000
-pollen development	vacuole organization	0.3000

@@ -1,10 +1,11 @@
 /**
- * Copyright (C) 2013, 2014, 2015 Universidad Simón Bolívar
+ * Copyright (C) 2013-2015 Universidad Simón Bolívar
  *
  * Copying: GNU GENERAL PUBLIC LICENSE Version 2
  * @author Guillermo Palma <gpalma@ldc.usb.ve>
  */
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -14,65 +15,59 @@
 #include <assert.h>
 
 #include "types.h"
-#include "graph.h"
 #include "memory.h"
 #include "hash_map.h"
 #include "util.h"
 #include "input.h"
 
-#define HASH_SZ   503
-#define BUFSZ     128
-#define COST      1
-
-struct arc {
-     char *from;
-     char *to;
-     long cost;
-};
-
-struct graph_data {
-     long n_nodes;
-     long n_arcs;
-     struct arc *larcs;
-};
-
-struct term {
-     char *name;
-     char *description;
-};
-
-struct term_data
-{
-     long nr;
-     struct term *term_array;
-};
+#define BUFSZ     256
 
 struct concept {
-     long pos;
+     int pos;
      struct hash_entry entry;
 };
 
 struct char_array {
      unsigned nr;
      unsigned alloc;
-     char *str;
+     char *data;
 };
 
-struct string_array {
+struct edge {
+     char *left;
+     char *right;
+     double weight;
+};
+
+struct graph_data {
      unsigned nr;
-     unsigned alloc;
-     char **data;
+     struct edge *edge_array;
 };
 
-enum node {
-     ROOT,
-     NOROOT
-};
+/*************************************
+ **  Utilities
+ ************************************/
 
-struct node_type {
-     enum node ntype;
-     struct hash_entry entry;
-};
+#ifdef PRGDEBUG
+static void print_int_array(struct int_array *v)
+{
+  printf("****************\n");
+  for (unsigned i = 0; i < v->nr; i++) {
+    printf("%d ", v->data[i]);
+  }
+  printf("\n");
+}
+
+static void print_node_prt_array(struct node_ptr_array *a)
+{
+     printf("\nNumber of elements: %u\n", a->nr);
+     for (unsigned i = 0; i < a->nr; i++) {
+	  printf("id %d pos left %d pos right %d sim %.3f\n",
+		 a->data[i]->id, a->data[i]->pos1, a->data[i]->pos2, a->data[i]->sim);
+     }
+}
+#endif
+
 
 /*********************************
  ** String processing
@@ -86,16 +81,16 @@ static inline void add_char(struct char_array *buf, char ch)
      nr = buf->nr;
      if (nr == alloc) {
 	  alloc = BUFSZ + alloc;
-	  buf->str = xrealloc(buf->str, alloc);
+	  buf->data = xrealloc(buf->data, alloc);
 	  buf->alloc = alloc;
      }
-     buf->str[nr] = ch;
+     buf->data[nr] = ch;
      buf->nr++;
 }
 
 static inline void init_char_array(struct char_array *buf)
 {
-     buf->str = xcalloc(BUFSZ, 1);
+     buf->data = xcalloc(BUFSZ, 1);
      buf->alloc = BUFSZ;
      buf->nr = 0;
 }
@@ -105,133 +100,59 @@ static inline void string_clean(struct char_array *buf)
      buf->nr = 0;
 }
 
-static void free_array_char(struct char_array *buf)
+static void free_string_array(struct string_array *sa)
 {
-     buf->nr = 0;
-     buf->alloc = 0;
-     free(buf->str);
+     for (unsigned i = 0; i < sa->nr; i++)
+	  if (sa->data[i])
+	       free(sa->data[i]);
+     free(sa->data);
+     sa->nr = 0;
 }
 
 /*********************************
- ** Graph processing
+ ** Terms processing
  *********************************/
 
-static void initialize_graph(struct graph_data *g, long n_nodes, long n_arcs)
-{
-     g->n_nodes = n_nodes;
-     g->n_arcs = n_arcs;
-
-     g->larcs = xcalloc(n_arcs, sizeof(struct arc));
-}
-
-static void free_graph_data(struct graph_data *g)
-{
-     long i;
-
-     for (i = 0; i < g->n_arcs; i++) {
-	  free(g->larcs[i].from);
-	  free(g->larcs[i].to);
-     }
-     free(g->larcs);
-     g->n_nodes = 0;
-     g->n_arcs = 0;
-}
-
-static long graph_loading(struct graph_data *gd, const char *graph_filename)
+static void terms_load(struct string_array *sa, const char *terms_filename)
 {
      FILE *f;
-     struct char_array buf;
-     long cont_arcs, n, l;
-     int ch, tok;
-     size_t len;
-
-     f = fopen(graph_filename, "r");
+     char buf[BUFSZ];
+     size_t last;
+     unsigned i, n;
+     int l;
+     
+     f = fopen(terms_filename, "r");
      if (!f) {
-	  fatal("No instance file specified, abort\n");
+	  fatal("no terms file specified, abort\n");
      }
-     n = 0;
-     l = 0;
-     init_char_array(&buf);
-     ch = getc(f);
+     if (fgets(buf, sizeof(buf), f) == NULL)
+	  fatal("error reading file");
      errno = 0;
-     /* read number of nodes and arcs */
-     while((ch != '\n') && (ch != EOF)) {
-	  if (ch == '\t') {
-	       add_char(&buf, '\0');
-	       n = strtol(buf.str, NULL, 10);
-	       if (errno)
-		    fatal("Error in the conversion of string to integer\n");
-	       string_clean(&buf);
-	  } else {
-	       add_char(&buf, ch);
-	  }
-	  ch = getc(f);
-     }
-     if (ch != EOF) {
-	  add_char(&buf, '\0');
-	  l = strtol(buf.str, NULL, 10);
-	  if (errno)
-	       fatal("Error in the conversion of string to integer\n");
-     } else {
-	  fatal("Error reading the graph data file\n");
-     }
-     string_clean(&buf);
-     initialize_graph(gd, n, l);
-     /* read graphs arcs */
-     ch = getc(f);
-     if (ch == EOF) {
-	  fatal("Error reading the graph data file\n");
-     }
-     tok = 1;
-     cont_arcs = 0;
-     while ((ch != EOF) && (cont_arcs < l)) {
-	  if ((ch != '\t') && (ch != '\n')) {
-	       add_char(&buf, ch);
-	  } else {
-	       add_char(&buf, '\0');
-	       if (ch == '\t') {
-		    len = strlen(buf.str) + 1;
-		    assert(len > 1);
-		    if (tok == 1) {
-			 gd->larcs[cont_arcs].from = xmalloc(len);
-			 strcpy(gd->larcs[cont_arcs].from, buf.str);
-		    } else if (tok == 2) {
-			 gd->larcs[cont_arcs].to = xmalloc(len);
-			 strcpy(gd->larcs[cont_arcs].to, buf.str);
-		    } else {
-			 fatal("Error in graph format\n");
-		    }
-		    tok++;
-	       } else {
-		    assert(ch == '\n');
-		    if (tok != 3)
-			 fatal("Error in graph format\n");
-		    gd->larcs[cont_arcs].cost = strtol(buf.str, NULL, 10);
-		    if (errno)
-			 fatal("Error in the conversion of string to integer\n");
-		    cont_arcs++;
-		    tok = 1;
-	       }
-	       string_clean(&buf);
-	  }
-	  ch = getc(f);
+     n = strtol(buf, NULL, 10);
+     if (errno)
+	  fatal("error in the conversion of string to integer\n");
+     ALLOC_GROW(sa->data, n+sa->nr, sa->alloc);
+     for (i = 0; i < n; i++) {
+	  if (fgets(buf, sizeof(buf), f) == NULL)
+	       fatal("Error reading file");
+	  last = strlen(buf) - 1;
+	  if(buf[last] == '\n')
+	       buf[last] = 0;
+	  l = asprintf(&sa->data[sa->nr],"%s", buf);
+	  if (l == -1)
+	       fatal("error in term creation");
+	  sa->nr++;
      }
      fclose(f);
-     free_array_char(&buf);
-     if (cont_arcs < l)
-	  fatal("Incorrect number of arcs\n");
-     return n;
 }
 
 #ifdef PRGDEBUG
-static void print_graph_data(const struct graph_data *gd)
+static void print_string_array(struct string_array *sa)
 {
-     long i;
-
-     printf("Nodes %ld -- Arcs %ld\n", gd->n_nodes, gd->n_arcs);
-     for (i = 0; i < gd->n_arcs; i++) {
-	  printf("%s\t%s\t%ld\n", gd->larcs[i].from, gd->larcs[i].to, gd->larcs[i].cost);
-     }
+     printf("\nNumber of elements %d\n", sa->nr);
+     for (unsigned i = 0; i < sa->nr; i++)
+	  printf("%s\n", sa->data[i]);
+     printf("\n");
 }
 #endif
 
@@ -240,13 +161,14 @@ static void print_graph_data(const struct graph_data *gd)
  *********************************/
 
 #ifdef PRGDEBUG
-static void print_sim_matrix(double **M, long n)
+static void print_sim_matrix(struct matrix *M)
 {
-     long i,j;
+     int i, j;
+     
      printf("***********************\n");
-     for (i = 0; i < n; i++) {
-	  for (j = 0; j < n; j++) {
-	       printf("%.3f ", M[i][j]);
+     for (i = M->start; i < M->end; i++) {
+	  for (j = M->start; j < M->end; j++) {
+	       printf("%.3f ", M->data[i][j]);
 	  }
 	  printf("\n");
      }
@@ -254,13 +176,12 @@ static void print_sim_matrix(double **M, long n)
 }
 #endif
 
-static double **similarity_matrix_load(const char *filename, long *nodes)
+static void similarity_matrix_load(const char *filename, int start, struct matrix *m)
 {
      FILE *f;
      struct char_array buf;
-     long n, i, j;
+     int n, i, j, end;
      int ch;
-     double **M;
 
      f = fopen(filename, "r");
      if (!f) {
@@ -277,20 +198,23 @@ static double **similarity_matrix_load(const char *filename, long *nodes)
      }
      if (ch != EOF) {
 	  add_char(&buf, '\0');
-	  n = strtol(buf.str, NULL, 10);
+	  n = strtol(buf.data, NULL, 10);
 	  if (errno)
-	       fatal("Error in the conversion of string to integer\n");
+	       fatal("error in the conversion of string to integer\n");
      } else {
-	  fatal("Error reading the graph data file\n");
+	  fatal("error reading the matrix data file\n");
      }
      string_clean(&buf);
-     *nodes = n;
-     M = double_matrix(0, n, 0, n);
-     i = 0;
-     j = 0;
+     m->start = start;
+     end = n+start;
+     m->start = start;
+     m->end = end;
+     m->data = double_matrix(start, end, start, end);
+     i = start;
+     j = start;
      ch = getc(f);
      if (ch == EOF) {
-	  fatal("Error reading the graph data file\n");
+	  fatal("error reading the matrix data file\n");
      }
      errno = 0;
      while (ch != EOF) {
@@ -298,303 +222,28 @@ static double **similarity_matrix_load(const char *filename, long *nodes)
 	       add_char(&buf, ch);
 	  } else {
 	       add_char(&buf, '\0');
-	       M[i][j] = strtod(buf.str, NULL);
-	       n++;
+	       m->data[i][j] = strtod(buf.data, NULL);
 	       if (errno)
-		    fatal("Error in the conversion of string to double\n");
+		    fatal("error in the conversion of string to double\n");
 	       if (ch == ' ') {
 		    j++;
 	       } else if (ch == '\n') {
 		    i++;
-		    j = 0;
+		    j = start;
 	       } else {
-		    fatal("Unknown character");
+		    fatal("unknown character");
 	       }
 	       string_clean(&buf);
 	  }
 	  ch = getc(f);
      }
      fclose(f);
-     free_array_char(&buf);
-     return M;
+     free_array(buf);
 }
 
-/*********************************
- ** Ontology terms processing
- *********************************/
-
-static void free_terms(struct term *t)
-{
-     free(t->name);
-     free(t->description);
-}
-
-static void free_term_data(struct term_data *td)
-{
-     long i;
-
-     for (i = 0; i < td->nr; i++)
-	  free_terms(&td->term_array[i]);
-     td->nr = 0;
-     free(td->term_array);
-}
-
-static void initialize_terms(struct term_data *td, long n)
-{
-     td->nr = n;
-     td->term_array = xcalloc(n, sizeof(struct term));
-}
-
-static void load_of_terms(struct term_data *td, const char *desc_filename, 
-			  bool description)
-{
-     FILE *f;
-     struct char_array buf;
-     long n, i;
-     int ch, tok;
-     size_t len;
-
-     f = fopen(desc_filename, "r");
-     if (!f) {
-	  fatal("No instance file specified, abort\n");
-     }
-     n = 0;
-     init_char_array(&buf);
-     ch = getc(f);
-     errno = 0;
-     /* read number of terms */
-     while((ch != '\n') && (ch != EOF)) {
-	  add_char(&buf, ch);
-	  ch = getc(f);
-     }
-     if (ch != EOF) {
-	  add_char(&buf, '\0');
-	  n = strtol(buf.str, NULL, 10);
-	  if (errno)
-	       fatal("Error in the conversion of string to integer\n");
-     } else {
-	  fatal("Error reading the description data file\n");
-     }
-     string_clean(&buf);
-     initialize_terms(td, n);
-     /* read the terms */
-     ch = getc(f);
-     if (ch == EOF) {
-	  fatal("Error reading the description data file\n");
-     }
-     tok = 1;
-     i = 0;
-     while ((ch != EOF) && (i < n)) {
-	  if ((ch != '\t') && (ch != '\n')) {
-	       add_char(&buf, ch);
-	  } else {
-	       add_char(&buf, '\0');
-	       if (ch == '\t') {
-		    if (tok != 1)
-			 fatal("Error in term file format\n");
-		    len = strlen(buf.str) + 1;
-		    assert(len > 1);
-		    td->term_array[i].name = xmalloc(len);
-		    strcpy(td->term_array[i].name, buf.str);
-		    tok++;
-		    if (!description) {
-			 td->term_array[i].description = xmalloc(len);
-			 strcpy(td->term_array[i].description, buf.str);
-		    }
-	       } else {
-		    assert(ch == '\n');
-		    if (tok != 2)
-			 fatal("Error in term file format\n");
-		    if (description) {
-			 len = strlen(buf.str) + 1;
-			 assert(len > 1);
-			 td->term_array[i].description = xmalloc(len);
-			 strcpy(td->term_array[i].description, buf.str);
-		    }
-		    i++;
-		    tok = 1;
-	       }
-	       string_clean(&buf);
-	  }
-	  ch = getc(f);
-     }
-     fclose(f);
-     free_array_char(&buf);
-}
-
-#ifdef PRGDEBUG
-static void print_term_data(const struct term_data *td)
-{
-     long i;
-
-     printf("\nNumber of terms %ld\n", td->nr);
-     printf("Name\tDescriptions\n");
-     for (i = 0; i < td->nr; i++) {
-	  printf("%s\t%s\n", td->term_array[i].name, td->term_array[i].description);
-     }
-}
-#endif
-
-static void free_string_array(struct string_array *sa)
-{
-     for (unsigned i = 0; i < sa->nr; i++)
-	  free(sa->data[i]);
-     free(sa->data);
-     sa->nr = 0;
-}
-
-static void annotations_load(struct string_array *sa, const char *annt_filename)
-{
-     FILE *f;
-     char buf[128];
-     size_t len;
-     unsigned i, n;
-
-     f = fopen(annt_filename, "r");
-     if (!f) {
-	  fatal("No instance file specified, abort\n");
-     }
-     if (fgets(buf, sizeof(buf), f) == NULL)
-	  fatal("Error reading file");
-     errno = 0;
-     n = strtol(buf, NULL, 10);
-     if (errno)
-	  fatal("Error in the conversion of string to integer\n");
-     ALLOC_GROW(sa->data, n, sa->alloc);
-     for (i = 0; i < n; i++) {
-	  if (fgets(buf, sizeof(buf), f) == NULL)
-	       fatal("Error reading file");
-	  len = strlen(buf) - 1;
-	  if(buf[len] == '\n')
-	       buf[len] = 0;
-	  sa->data[sa->nr] = xcalloc(len+1, sizeof(char));
-	  strcpy(sa->data[sa->nr], buf);
-	  sa->nr++;
-     }
-     assert(n == sa->nr);
-     fclose(f);
-}
-
-#ifdef PRGDEBUG
-static void print_string_array(struct string_array *sa)
-{
-     long i;
-
-     printf("\nAnnotations\n");
-     for (i = 0; i < sa->nr; i++)
-	  printf("%s\n", sa->data[i]);
-     printf("\n");
-}
-#endif
-
-/********************************************************************
- ** Generation of the internal representation of the ontology graph
- ********************************************************************/
-
-static void get_graph_roots(const struct graph_data *gd, struct string_array *roots)
-{
-     long i;
-     struct hash_map root_set;
-     struct node_type *item;
-     struct hash_entry *hentry;
-     struct hlist_node *n;
-     size_t len;
-     char *term;
-
-     hmap_create(&root_set, HASH_SZ);
-     for (i = 0; i < gd->n_arcs; i++) {
-	  len = strlen(gd->larcs[i].from);
-	  hentry = hmap_find_member(&root_set, gd->larcs[i].from, len);
-	  if (hentry == NULL) {
-	       item = xmalloc(sizeof(struct node_type));
-	       item->ntype = ROOT;
-	       if (hmap_add(&root_set, &item->entry, gd->larcs[i].from, len) != 0)
-		    fatal("Error in the set of roots");
-	  }
-	  len = strlen(gd->larcs[i].to);
-	  hentry = hmap_find_member(&root_set, gd->larcs[i].to, len);
-	  if (hentry == NULL) {
-	       item = xmalloc(sizeof(struct node_type));
-	       item->ntype = NOROOT;
-	       if (hmap_add(&root_set, &item->entry, gd->larcs[i].to, len) != 0)
-		    fatal("Error in the set of roots");
-	  } else {
-	       item = hash_entry(hentry, struct node_type, entry);
-	       item->ntype = NOROOT;
-	  }
-     }
-     hmap_for_each_safe(hentry, n, &root_set) {
-	  item = hash_entry(hentry, struct node_type, entry);
-	  if (item->ntype == ROOT) {
-	       term = xmalloc(hentry->keylen+1);
-	       strcpy(term, hentry->key);
-	       ARRAY_PUSH(*roots, term);
-	  }
-	  hmap_delete(&root_set, hentry);
-	  free(item);
-     }
-     hmap_destroy(&root_set);
-}
-
-#ifdef PRGDEBUG
-static void print_ontology_roots(conts struct string_array *roots)
-{
-     printf("\nRoots of the ontology\n");
-     for (unsigned i = 0; i < roots->nr; i++) {
-	  printf("%s\n", roots->data[i]);
-     }
-     printf("\n");
-}
-#endif
-
-static void configure_the_single_root(struct graph_data *gd,
-                                      struct term_data *td,
-                                      const struct string_array *roots)
-{
-  long i, j, alloc, nr;
-  char *term, *tmp;
-  const char *root_name = "ROOT";
-  const char *root_desc = "Ontology Root";
-
-  if (roots->nr == 1) {
-    term = roots->data[0];
-    if (strcmp(term, td->term_array[0].name) != 0) {
-      for (i = 0; i < td->nr; i++) {
-        if (strcmp(term, td->term_array[i].name) == 0) {
-          tmp = td->term_array[i].name;
-          td->term_array[i].name = td->term_array[0].name;
-          td->term_array[0].name = tmp;
-          tmp = td->term_array[i].description;
-          td->term_array[i].description = td->term_array[0].description;
-          td->term_array[0].description = tmp;
-          break;
-        }
-      }
-    }
-  } else {
-    nr = td->nr;
-    td->term_array = xrealloc(td->term_array, (nr+1)*sizeof(struct term));
-    memmove(td->term_array+1, td->term_array, nr*sizeof(struct term));
-    td->nr++;
-    td->term_array[0].name = xmalloc(strlen(root_name)+1);
-    td->term_array[0].description = xmalloc(strlen(root_desc)+1);
-    strcpy(td->term_array[0].name, root_name);
-    strcpy(td->term_array[0].description, root_desc);
-    alloc = gd->n_arcs + roots->nr;
-    gd->larcs = xrealloc(gd->larcs, alloc*sizeof(struct arc));
-    for (i = gd->n_arcs, j = 0; i < alloc; i++, j++) {
-      gd->larcs[i].from = xmalloc(strlen(root_name)+1);
-      strcpy(gd->larcs[i].from, root_name);
-      term = roots->data[j];
-      gd->larcs[i].to = xmalloc(strlen(term)+1);
-      strcpy(gd->larcs[i].to, term);
-      gd->larcs[i].cost = COST;
-    }
-    gd->n_arcs = alloc;
-    gd->n_nodes++;
-  }
-}
-
+/*********************************************
+ ** Mapping terms to positions of the array
+ *********************************************/
 
 #ifdef PRGDEBUG
 static void print_hash_term(struct hash_map *term_pos)
@@ -603,9 +252,10 @@ static void print_hash_term(struct hash_map *term_pos)
      struct hash_entry *hentry;
 
      printf("\nMap term-position\n");
+     printf("Number of terms: %u\n", term_pos->fill);
      hmap_for_each(hentry, term_pos) {
 	  item = hash_entry(hentry, struct concept, entry);
-	  printf("** %s %ld\n", hentry->key, item->pos);
+	  printf("** %s %d\n", hentry->key, item->pos);
      }
 }
 #endif
@@ -624,224 +274,248 @@ static void free_map_term_pos(struct hash_map *term_pos)
      hmap_destroy(term_pos);
 }
 
-static void map_term_pos(struct hash_map *term_pos, const struct term_data *td)
+static void map_term_pos(struct hash_map *term_pos, const struct string_array *td)
 {
-     long i, n;
+     int i, n;
      struct concept *item;
      size_t len;
 
      n = td->nr;
-     hmap_create(term_pos, n*2);
+     hmap_create(term_pos, n*2+1);
      for (i = 0; i < n; i++) {
-	  if (td->term_array[i].name == NULL)
-	       fatal("Invalid name");
-	  len = strlen(td->term_array[i].name);
+	  if (td->data[i] == NULL)
+	       fatal("invalid name");
+	  len = strlen(td->data[i]);
 	  item = xmalloc(sizeof(struct concept));
 	  item->pos = i;
-	  if (hmap_add_if_not_member(term_pos, &item->entry, td->term_array[i].name, len) != NULL)
-	       fatal("Error, term repeated in the file term-description\n");
+	  if (hmap_add_if_not_member(term_pos, &item->entry, td->data[i], len) != NULL)
+	       fatal("error, term %s is repeated in the file\n", td->data[i]);
      }
 }
 
-#ifdef PRGDEBUG
-static void print_descriptions(char **desc, long n)
-{
-     long i;
+/*********************************
+ ** Bipartite graph processing
+ *********************************/
 
-     printf("\nDescriptions\n");
-     for (i = 0; i < n; i++) {
-	  printf("%s\n", desc[i]);
+#ifdef PRGDEBUG
+static void print_graph_data(const struct graph_data *td)
+{
+     printf("\nNumber of edges %d\n", td->nr);
+     for (unsigned i = 0; i < td->nr; i++) {
+	  printf("%s\t%s\t%.3f\n", td->edge_array[i].left, td->edge_array[i].right,
+		 td->edge_array[i].weight);
      }
-     printf("********************\n");
 }
 #endif
 
-static char **get_descriptions(const struct term_data *td)
+static void free_term_data(struct graph_data *td)
 {
-     long i, n;
+     for (unsigned i = 0; i < td->nr; i++) {
+	  free(td->edge_array[i].right);
+	  free(td->edge_array[i].left);
+     }
+     td->nr = 0;
+     free(td->edge_array);
+}
+
+static void graph_load(struct graph_data *td, const char *filename)
+{
+     FILE *f;
+     struct char_array buf;
+     int n, i;
+     int ch, tok;
      size_t len;
-     char **desc;
 
-     n = td->nr;
-     desc = xcalloc(n, sizeof(char *));
-     for (i = 0; i < n; i++) {
-	  if (td->term_array[i].description == NULL)
-	       fatal("Invalid Description");
-	  len = strlen(td->term_array[i].description);
-	  desc[i] = xmalloc(len+1);
-	  strcpy(desc[i], td->term_array[i].description);
+     f = fopen(filename, "r");
+     if (!f) {
+	  fatal("no graph file specified, abort\n");
      }
-     return desc;
+     n = 0;
+     init_char_array(&buf);
+     ch = getc(f);
+     errno = 0;
+     /* read number of terms */
+     while((ch != '\n') && (ch != EOF)) {
+	  add_char(&buf, ch);
+	  ch = getc(f);
+     }
+     if (ch != EOF) {
+	  add_char(&buf, '\0');
+	  n = strtol(buf.data, NULL, 10);
+	  if (errno)
+	       fatal("Error in the conversion of string to integer\n");
+     } else {
+	  fatal("Error reading the description data file\n");
+     }
+     string_clean(&buf);
+
+     td->nr = n;
+     td->edge_array = (struct edge *)xcalloc(n, sizeof(struct edge));
+     /* read the terms */
+     ch = getc(f);
+     if (ch == EOF) {
+	  fatal("Error reading the graph data file\n");
+     }
+     tok = 1;
+     i = 0;
+     while ((ch != EOF) && (i < n)) {
+	  if ((ch != '\t') && (ch != '\n')) {
+	       add_char(&buf, ch);
+	  } else {
+	       add_char(&buf, '\0');
+	       if (ch == '\t') {
+		    len = strlen(buf.data) + 1;
+		    assert(len > 1);
+		    if (tok == 1) {
+			 td->edge_array[i].left = xmalloc(len);
+			 strcpy(td->edge_array[i].left, buf.data);
+		    } else if (tok == 2) {
+			 td->edge_array[i].right = xmalloc(len);
+			 strcpy(td->edge_array[i].right, buf.data);
+		    } else {
+			 fatal("error in graph file format\n");
+		    }
+		    tok++;
+	       } else {
+		    assert(ch == '\n');
+		    if (tok != 3)
+			 fatal("Error in term file format\n");
+		    errno = 0;
+		    td->edge_array[i].weight = strtod(buf.data, NULL);
+		    if (errno)
+			 fatal("error in the conversion of string to integer\n");
+		    i++;
+		    tok = 1;
+	       }
+	       string_clean(&buf);
+	  }
+	  ch = getc(f);
+     }
+     fclose(f);
+     free_array(buf);
 }
 
-#ifdef PRGDEBUG
-static void print_annotations(const struct long_array *annts)
-{
-     long term;
-
-     printf("\nAnnotations\n");
-     for (unsigned i = 0; i < annts->nr; i++) {
-	  term = annts->data[i];
-	  printf("%ld\n", term);
-     }
-     printf("\n");
-}
-#endif
-
-static struct long_array get_annotations(struct string_array *sa,
-					 struct hash_map *term_pos)
+static void build_bipartite_graph(const struct hash_map *term_pos, const struct graph_data *gd,
+				  struct node_ptr_array *bpgraph, struct int_array *lt,
+				  struct int_array *rt, int n_left)
 {
      unsigned i, n;
+     int lp, rp;
      struct concept *item;
      struct hash_entry *hentry;
+     struct node *new;
+     bool *in_graph;
+     int *pos_left, *pos_right;
      size_t len;
-     struct long_array annts = {0, 0, NULL};
      
-     n = sa->nr;
-     ALLOC_GROW(annts.data, n, annts.alloc);
-     for (i = 0; i < n; i++) {
-	  len = strlen(sa->data[i]);
-	  hentry = hmap_find_member(term_pos, sa->data[i], len);
+     n = term_pos->fill;
+     in_graph = (bool *)xcalloc(n, sizeof(bool));
+     memset(in_graph, false, n*sizeof(bool));
+     
+     pos_left = (int *)xcalloc(n, sizeof(int));
+     pos_right = (int *)xcalloc(n, sizeof(int));
+     
+     for (i = 0; i < gd->nr; i++) {
+	  len = strlen(gd->edge_array[i].left);
+	  hentry = hmap_find_member(term_pos, gd->edge_array[i].left, len); 
 	  if (hentry == NULL)
-	       fatal("The term %s does not exist in the term list", sa->data[i]);
+	       fatal("the node %s is not in the left elements\n", gd->edge_array[i].left);
 	  item = hash_entry(hentry, struct concept, entry);
 	  if (item == NULL)
-	       fatal("Invalid annotation");
-	  ARRAY_PUSH(annts, item->pos);
+	       fatal("Invalid element");
+	  lp = item->pos;
+	  if (lp >= n_left)
+	       fatal("%s should be not in the left side", gd->edge_array[i].left);
+	       	 	  
+	  len = strlen(gd->edge_array[i].right);
+	  hentry = hmap_find_member(term_pos, gd->edge_array[i].right, len); 
+	  if (hentry == NULL)
+	       fatal("the node %s is not in the right elements\n", gd->edge_array[i].right);
+	  item = hash_entry(hentry, struct concept, entry);
+	  if (item == NULL)
+	       fatal("invalid element");
+	  rp = item->pos;
+	  if (rp < n_left)
+	       fatal("%s should be not in the left side", gd->edge_array[i].right);
+	  
+	  if (!in_graph[lp]) {
+	       in_graph[lp] = true;
+	       pos_left[lp] = lt->nr;
+	       ARRAY_PUSH(*lt, lp);
+	  }
+
+	  if (!in_graph[rp]) {
+	       in_graph[rp] = true;
+	       pos_right[rp] = rt->nr;
+	       ARRAY_PUSH(*rt, rp);
+	  }
+
+	  new = xcalloc(1, sizeof(struct node));
+	  new->id = i;
+	  new->pos1 = pos_left[lp];
+	  new->pos2 = pos_right[rp];
+	  new->sim = gd->edge_array[i].weight;
+	  new->cp = NULL;
+	  ARRAY_PUSH(*bpgraph, new);
      }
-     return annts;
-}
-
-static struct graph *generate_internal_graph(const struct graph_data *gd,
-					     struct hash_map *term_pos)
-{
-  long i, from, to;
-  struct graph *g;
-  struct concept *item;
-  struct hash_entry *hentry;
-  size_t len;
-
-  g = (struct graph *)xcalloc(1, sizeof(struct graph));
-  init_graph(g, gd->n_nodes);
-  for (i = 0; i < gd->n_arcs; i++) {
-    /* from node */
-    len =  strlen(gd->larcs[i].from);
-    hentry = hmap_find_member(term_pos, gd->larcs[i].from, len);
-    if (hentry == NULL)
-      fatal("Error, the term %s does not exist in the term list", gd->larcs[i].from);
-    item = hash_entry(hentry, struct concept, entry);
-    from = item->pos;
-
-    /* to node */
-    len =  strlen(gd->larcs[i].to);
-    hentry = hmap_find_member(term_pos, gd->larcs[i].to, len);
-    if (hentry == NULL)
-      fatal("Error; the term %s does not exist in the term list", gd->larcs[i].to);
-    item = hash_entry(hentry, struct concept, entry);
-    to = item->pos;
-
-    /* add to the graph */
-    add_arc_to_graph(g, i, from, to, gd->larcs[i].cost);
-  }
-  assert(g->n_edges == gd->n_arcs);
-  assert(g->n_nodes == term_pos->fill);
-  return g;
-}
-
-static void free_roots(struct string_array *roots)
-{
-   for (unsigned i = 0; i < roots->nr; i++)
-     free(roots->data[i]);
-  free(roots->data);
+     free(in_graph);
+     free(pos_right);
+     free(pos_left);
 }
 
 /*********************************
  ** Input Data
  *********************************/
 
-void free_input_data(struct input_data *in, bool matrix)
+void free_input_data(struct input_data *in)
 {
-     long i;
-     double **m;
-     struct graph *g;
-
-     for (i = 0; i < in->n; i++)
-	  free(in->descriptions[i]);
-     free(in->descriptions);
-     free(in->anntt1.data);
-     free(in->anntt2.data);
-     if (matrix) {
-	  m = (double **)in->object;
-	  free_double_matrix(m, 0, 0);
-     } else {
-	  g = (struct graph *)in->object;
-	  free_graph(g);
-	  free(g);
-     }
+     free_double_matrix(in->left_matrix.data, in->left_matrix.start, in->left_matrix.start);
+     free_double_matrix(in->right_matrix.data, in->right_matrix.start, in->right_matrix.start);
+     free_array(in->left_terms);
+     free_array(in->right_terms);
+     free_string_array(&in->td);
+     for (unsigned i = 0; i < in->bpgraph.nr; i++)
+	  if (in->bpgraph.data[i])
+	       free(in->bpgraph.data[i]);
+     free(in->bpgraph.data);
 }
 
-struct input_data get_input_data(const char *object_filename, const char *desc_filename,
-				 const char *annt1_filename, const char *annt2_filename,
-				 bool matrix, bool description)
+struct input_data get_input_data(const char *matrix_left_filename, const char *matrix_right_filename,
+				 const char *left_filename, const char *right_filename,
+				 const char *graph_filename)
 {
-     struct graph_data gd;
+     int nl;
      struct input_data in;
-     struct term_data td;
      struct hash_map term_pos;
-     double **sim_matrix;
-     struct graph *g;
-     struct string_array sa1 = {0, 0, NULL};
-     struct string_array sa2 = {0, 0, NULL};
-     struct string_array roots = {0, 0, NULL};
+     struct graph_data gd;
 
-     load_of_terms(&td, desc_filename, description);
-     annotations_load(&sa1, annt1_filename);
-     annotations_load(&sa2, annt2_filename);
-     if (matrix) {
-          sim_matrix = similarity_matrix_load(object_filename, &in.n);
-	  printf("Similarity Matrix has %ld elements\n", in.n);
-	  in.object = sim_matrix;
-	  map_term_pos(&term_pos, &td);
-	  in.descriptions = get_descriptions(&td);
-     } else {
-	  in.n = graph_loading(&gd, object_filename);
-	  if (td.nr != in.n)
-	       fatal("Number of nodes of the graph is diferent to the number of terms");
-	  get_graph_roots(&gd, &roots);
-	  configure_the_single_root(&gd, &td, &roots);
-	  map_term_pos(&term_pos, &td);
-	  in.descriptions = get_descriptions(&td);
-	  g = generate_internal_graph(&gd, &term_pos);
-	  add_reprensentative_ancestor(g);
-	  in.n = g->n_nodes;
-	  printf("Input graph has %ld vertices\n", in.n);
-	  in.object = g;
-     }
-     in.anntt1 = get_annotations(&sa1, &term_pos);
-     in.anntt2 = get_annotations(&sa2, &term_pos);
+     init_struct_array(in.td);
+     terms_load(&in.td, left_filename);
+     nl = in.td.nr;
+     terms_load(&in.td, right_filename);
+     similarity_matrix_load(matrix_left_filename, 0, &in.left_matrix);
+     similarity_matrix_load(matrix_right_filename, nl, &in.right_matrix);
+     printf("Left matrix has %d elements\n", (in.left_matrix.end-in.left_matrix.start));
+     printf("Right matrix has %d elements\n",(in.right_matrix.end-in.right_matrix.start));
+     map_term_pos(&term_pos, &in.td);
+     init_struct_array(in.bpgraph);
+     graph_load(&gd, graph_filename);
+     init_struct_array(in.left_terms);
+     init_struct_array(in.right_terms);
+     init_struct_array(in.bpgraph);
+     build_bipartite_graph(&term_pos, &gd, &in.bpgraph, &in.left_terms, &in.right_terms, nl);
 #ifdef PRGDEBUG
-     if (matrix) {
-	  print_sim_matrix(sim_matrix, in.n);
-     } else {
-	  print_graph_data(&gd);
-	  print_ontology_roots(&roots);
-     }
-     print_string_array(&sa1);
-     print_string_array(&sa2);
-     print_term_data(&td);
-     print_descriptions(in.descriptions, td.nr);
+     print_string_array(&in.td);
+     print_sim_matrix(&in.left_matrix);
+     print_sim_matrix(&in.right_matrix);
      print_hash_term(&term_pos);
-     print_annotations(&in.anntt1);
-     print_annotations(&in.anntt2);
+     print_graph_data(&gd);
+     print_int_array(&in.left_terms);
+     print_int_array(&in.right_terms);
+     print_node_prt_array(&in.bpgraph);
 #endif
-     if (!matrix) {
-	  free_roots(&roots);
-	  free_graph_data(&gd);
-     }
-     free_string_array(&sa1);
-     free_string_array(&sa2);
-     free_term_data(&td);
      free_map_term_pos(&term_pos);
-
+     free_term_data(&gd);
+     
      return in;
 }

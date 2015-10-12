@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2013, 2014, 2015 Universidad Simón Bolívar
+ * Copyright (C) 2013-2015 Universidad Simón Bolívar
  *
  * Copying: GNU GENERAL PUBLIC LICENSE Version 2
  * @author Guillermo Palma <gpalma@ldc.usb.ve>
@@ -19,36 +19,25 @@
 #include <time.h>
 
 #include "dlist.h"
-#include "types.h"
-#include "graph.h"
+#include "graph_adj.h"
 #include "memory.h"
 #include "hash_map.h"
 #include "util.h"
-#include "metric.h"
+#include "rbtree.h"
 #include "semEP.h"
 
-#define COST       0
-#define NOCOLOR   -1
-#define NONODE    -1
-#define INFTY      LONG_MAX
-#define ROOT       0
+#define COST          0
+#define NOCOLOR      -1
+#define NONODE       -1
+#define NOCLUSTER    -1
+#define INFTY         INT_MAX
 
 /*
  * Macros used for binaries heaps implementation
  */
-#define PARENT(i)     ((long)(((i) - 1) / 2))
+#define PARENT(i)     ((int)(((i) - 1) / 2))
 #define LEFT(i)       (((i) * 2) + 1)
 #define RIGHT(i)      (((i) * 2) + 2)
-
-struct color {
-     long id;
-     double sim_entity_1;
-     double sim_entity_2;
-     double sim_between;
-     struct long_array id_nodes;
-     struct long_array entities1;
-     struct long_array entities2;
-};
 
 struct color_ptr_array{
      unsigned nr;
@@ -56,39 +45,32 @@ struct color_ptr_array{
      struct color **data;
 };
 
-struct node {
-     long id;
-     long pos1;
-     long pos2;
-     double sim;
-     struct color *cp;
-};
-
-struct node_ptr_array{
-     unsigned nr;
-     unsigned alloc;
-     struct node **data;
-};
-
 typedef struct item_entry {
      double value;
      struct hash_entry entry;
 } item_entry_t;
 
+typedef struct set_type {
+     int key_int;
+     struct rb_node node;
+} set_type_t;
+
 typedef struct saturation {
-     long node;
-     long n_adj_colors;
-     bool *color_used;
+     int node;
+     int n_adj_colors;
+     struct rb_root color_used;
 } saturation_t;
 
 typedef struct pqueue {
-     long size;
+     int size;
+     int *node_pos;
      saturation_t **heap;
 } pqueue_t; 
 
 typedef struct prediction {
-     long entity1;
-     long entity2;
+     int cluster;
+     int entity1;
+     int entity2;
      double prob;
 } prediction_t;
 
@@ -98,121 +80,47 @@ typedef struct prediction_array {
      prediction_t *data;
 } prediction_array_t;
 
-typedef struct prediction_partition {
-     unsigned nr;
-     prediction_array_t *pred; 
-} prediction_partition_t;
+/*
+ * Variables to get the simimilarity
+ */
 
-static double (*metricPtr)(const struct graph *g, long x, long y);
+static int sl, sr, el, er;
+static double **ML;
+static double **MR;
 
-/*************************************
- *************************************
- **
- **  Utilities
- **
- ************************************
- ************************************/
+/***************************************************
+ **  Function to get the similirity between terms
+ ***************************************************/
 
-static double get_similarity(const struct graph *g, long x, long y)
+static inline double similarity(int a, int b)
 {
-     return (*metricPtr)(g, x, y);
-}
-
-static struct lpairs get_max_group_depth(const struct long_array *v1)
-{
-     long max_depth = 0; /* ROOT depth */
-     long max_node = ROOT;
-     long i, n, node;
-     const long *depth;
-     struct lpairs p;
-
-     depth = get_nodes_depth();
-     n = v1->nr;
-     for (i = 0; i < n; i++) {
-	  node = v1->data[i];
-	  if (max_depth <  depth[node]) {
-	       max_depth = depth[node];
-	       max_node = node;
-	  }
-     }
-     p.x = max_node;
-     p.y = max_depth;
-
-     return p;
-}
-
-/*************************************
- *************************************
- **
- **  Make the graph to coloring
- **
- ************************************
- ************************************/
-
-static bool *nodes_in_the_term(const struct long_array *terms, long max)
-{
-     bool *in_term;
-
-     in_term = (bool *)xcalloc(max, sizeof(bool));
-     memset(in_term, false, max*sizeof(bool));
-
-     for (size_t i = 0; i < terms->nr; i++)
-	  in_term[terms->data[i]] = true;
-
-     return in_term;
-}
-
-static void compute_color_nodes(void *object, const struct long_array *v1,
-				const struct long_array *v2,
-				struct node_ptr_array *color_nodes, double threshold,
-				const bool* in_terms1, const bool* in_terms2, bool matrix)
-{
-     long i, j, n, m, x, y, cont;
-     double sim;
-     struct node *new;
-     double **M = NULL;
-     struct graph *g = NULL;
-
-     if (matrix) {
-	  M = (double **)object;
+     double sim = 0.0;
+     
+     if (((a >= sl) && (a < el)) && ((b >= sl) && (b < el))) {
+	  sim = ML[a][b];
+     } else if ((a >= sr) && (a < er) && (b >= sr) && (b < er)) {
+	  sim = MR[a][b];
      } else {
-	  g = (struct graph *)object;
+	  fatal("Error in computing the similarity between %d and %d\n", a, b);
      }
-
-     cont = 0;
-     n = v1->nr;
-     m = v2->nr;
-     for (i = 0; i < n; i++) {
-	  x = v1->data[i];
-	  for (j = 0; j < m; j++) {
-	       y = v2->data[j];
-	       if (matrix)
-		    sim = M[x][y];
-	       else
-		    sim = get_similarity(g,x,y);
-	       if  (sim > threshold) {
-		    if (!((in_terms2[x] && in_terms1[y]) && (x != y))) {
-			 new = xcalloc(1, sizeof(struct node));
-			 new->id = cont;
-			 new->pos1 = i;
-			 new->pos2 = j;
-			 new->sim = sim;
-			 new->cp = NULL;
-			 ARRAY_PUSH(*color_nodes, new);
-			 cont++;
-		    }
-	       }
-	  }
-     }
+     return sim;
 }
 
-static void build_graph_to_coloring_matrix(struct graph *gc, 
-					   struct node_ptr_array *vn, double **M, 
-					   const struct long_array *v1, 
-					   const struct long_array *v2,
+/*************************************
+ *************************************
+ **
+ **  Build the graph to coloring
+ **
+ ************************************
+ ************************************/
+
+static void build_graph_to_coloring_matrix(struct graph_adj *gc, 
+					   struct node_ptr_array *vn, 
+					   const struct int_array *v1, 
+					   const struct int_array *v2,
 					   double threshold1, double threshold2)
 {
-     long i, j, n, a, b, c, d, cont;
+     int i, j, n, a, b, c, d, cont;
      struct node *x, *y;
 
      n = vn->nr;
@@ -225,62 +133,64 @@ static void build_graph_to_coloring_matrix(struct graph *gc,
 	       y = vn->data[j];
 	       c = y->pos1;
 	       d = y->pos2;
-	       assert(a <= c);
-	       if ( (M[v1->data[a]][v1->data[c]] <= threshold1) ||
-		    (M[v2->data[b]][v2->data[d]] <= threshold2)) {
-		    add_arc_to_graph(gc, cont, i, j, COST);
-		    add_arc_to_graph(gc, cont, j, i, COST);
+	       if ( (similarity(v1->data[a], v1->data[c]) <= threshold1) ||
+		    (similarity(v2->data[b], v2->data[d]) <= threshold2) ) {
+		    add_arc(gc, cont, i, j);
+		    add_arc(gc, cont, j, i);
 		    cont++;
 	       }
 	  }
      }
 }
 
-static double **similarity_between_all(const struct graph *g, const struct long_array *v)
-{
-     long i, j, n;
-     double **sim_matrix;
+/*************************************
+ *************************************
+ **
+ **  Operations of a set implemented  
+ ** as red black tree
+ **
+ ************************************
+ ************************************/
 
-     n = v->nr;
-     sim_matrix = double_matrix(0, n, 0, n);
-     for (i = 0; i < n; i++) {
-	  for (j = i; j < n; j++) {
-	       sim_matrix[i][j] = get_similarity(g, v->data[i], v->data[j]);
-	       /* I suppose that the similarity measure is symmetric */
-	       sim_matrix[j][i] = sim_matrix[i][j];
-	  }
+static bool search_and_insert(struct rb_root *root, int key)
+{
+     struct rb_node **new;
+     struct rb_node *parent;
+     int result;
+     set_type_t *tmp;
+     set_type_t *data;
+     
+     parent = NULL;
+     new = &(root->rb_node); 
+     while (*new) {
+	  tmp = container_of(*new, set_type_t, node);
+	  result = tmp->key_int;
+	  parent = *new; 
+	  if (key < result)
+	       new = &((*new)->rb_left);
+	  else if (key > result)
+	       new = &((*new)->rb_right);
+	  else
+	       return false;
      }
-     return sim_matrix;
+     data = (set_type_t *)xmalloc(sizeof(set_type_t)); 
+     data->key_int = key;
+     rb_link_node(&data->node, parent, new);
+     rb_insert_color(&data->node, root);
+     return true;
 }
 
-static void build_graph_to_coloring_graph(struct graph *gc, struct node_ptr_array *vn,
-					  double **simM1, double **simM2,
-					  double threshold1, double threshold2)
+static void destroy_set(struct rb_root *mytree)
 {
-     long i, j, n, a, b, c, d, cont;
-     struct node *x, *y;
+     struct rb_node *node, *ant;
 
-     if (simM1 == NULL)
-	  fatal("Matrix 1 is NULL");
-     if (simM2 == NULL)
-	  fatal("Matrix 2 is NULL");
-     n = vn->nr;
-     cont = 0;
-     for (i = 0; i < n-1; i++) {
-	  x = vn->data[i];
-	  a = x->pos1;
-	  b = x->pos2;
-	  for (j = i+1; j < n; j++) {
-	       y = vn->data[j];
-	       c = y->pos1;
-	       d = y->pos2;
-	       assert(a <= c);
-	       if ( (simM1[a][c] <= threshold1) || (simM2[b][d] <= threshold2)) {
-		    add_arc_to_graph(gc, cont, i, j, COST);
-		    add_arc_to_graph(gc, cont, j, i, COST);
-		    cont++;
-	       }
-	  }
+     set_type_t *tmp;
+     for (node = rb_first(mytree); node; ) {
+	  tmp = rb_entry(node, set_type_t, node);
+	  ant = node;
+	  node = rb_next(node);
+	  rb_erase(ant, mytree);
+	  free(tmp);
      }
 }
 
@@ -292,7 +202,19 @@ static void build_graph_to_coloring_graph(struct graph *gc, struct node_ptr_arra
  ************************************
  ************************************/
 
-static inline int compare_saturation(const struct graph *g, const saturation_t *a, const saturation_t *b)
+#ifdef PRGDEBUG
+static void print_int_array(struct int_array *v)
+{
+     printf("\n");
+     for (size_t i = 0; i < v->nr; i++) {
+	  printf("%d ", v->data[i]);
+     }
+     printf("\n");
+}
+#endif
+
+static inline int compare_saturation(const struct graph_adj *g, const saturation_t *a,
+				     const saturation_t *b)
 {
      int r;
 
@@ -319,9 +241,7 @@ static inline int compare_saturation(const struct graph *g, const saturation_t *
 static void free_saturation_node(saturation_t *node)
 {
      if (node) {
-	  if (node->color_used == NULL)
-	       fatal("Error in delete table of used color");
-	  free(node->color_used);
+	  destroy_set(&node->color_used);
 	  free(node);
      }
 }
@@ -330,20 +250,22 @@ static inline void pq_init(pqueue_t *pq)
 {
      pq->size = 0;
      pq->heap = NULL;
+     pq->node_pos = NULL;
 }
 
 static inline void pq_delete(pqueue_t *pq)
 {
-     long i;
+     int i;
      
      for(i = 0; i < pq->size; i++)
 	  free_saturation_node(pq->heap[i]);
+     free(pq->node_pos);
      free(pq->heap);
 }
 
-static inline void pq_insert(const struct graph *g, pqueue_t *pq, saturation_t *node)
+static inline void pq_insert(const struct graph_adj *g, pqueue_t *pq, saturation_t *node)
 {
-     long i, p;
+     int i, p;
      saturation_t **tmp;
 
      tmp = xrealloc(pq->heap, (pq->size+1)*sizeof(saturation_t *));
@@ -359,24 +281,28 @@ static inline void pq_insert(const struct graph *g, pqueue_t *pq, saturation_t *
      pq->size++;
 }
 
-static long extract_max(const struct graph *g, pqueue_t *pq, saturation_t **node)
+static int extract_max(const struct graph_adj *g, pqueue_t *pq, saturation_t **node)
 {
-     long i, j, l, r;
+     int i, j, l, r;
      saturation_t *aux;
      saturation_t **tmp;
-
+          
      if(pq->size == 0)
 	  return -1;
 
      *node = pq->heap[0];
      aux =  pq->heap[pq->size-1];
+     SWAP(pq->node_pos[pq->heap[0]->node],
+	  pq->node_pos[pq->heap[pq->size-1]->node]); /* SWAP the positions*/
      if((pq->size - 1) > 0){
-	  tmp = xrealloc(pq->heap, (pq->size-1)*sizeof(saturation_t *));
+	  tmp = (saturation_t **)xrealloc(pq->heap, (pq->size-1)*sizeof(saturation_t *));
 	  pq->heap = tmp;
 	  pq->size--;
      } else {
 	  free(pq->heap);
 	  pq->heap = NULL;
+	  free(pq->node_pos);
+	  pq->node_pos = NULL;
 	  pq->size = 0;
 	  return 0;
      }
@@ -396,6 +322,8 @@ static long extract_max(const struct graph *g, pqueue_t *pq, saturation_t **node
 	  if( j == i ) {
 	       break;
 	  } else {
+	       SWAP(pq->node_pos[pq->heap[j]->node],
+		    pq->node_pos[pq->heap[i]->node]); /* SWAP the positions*/
 	       SWAP(pq->heap[j], pq->heap[i]);
 	       i = j;
 	  }
@@ -403,29 +331,30 @@ static long extract_max(const struct graph *g, pqueue_t *pq, saturation_t **node
      return 0;
 }
 
-static long increase_key(const struct graph *g, pqueue_t *pq, long node, long color)
+static int increase_key(const struct graph_adj *g, pqueue_t *pq, int node, int color)
 {
-     long i, p, pos;
-
+     int i, p, pos;
+	  
      if (pq->size == 0)
 	  return -1;
-     pos = -1;
-     for (i = 0; i < pq->size; i++)
-	  if (pq->heap[i]->node == node)
-	       pos = i;
+
+     pos = pq->node_pos[node];
+     if (pos >= pq->size)
+	  pos = -1;
+   
      if (pos == -1)
 	  return -2;
 
-     if (!pq->heap[pos]->color_used[color]) {
+     if (search_and_insert(&(pq->heap[pos]->color_used), color))
 	  pq->heap[pos]->n_adj_colors++;
-	  pq->heap[pos]->color_used[color] = true;
-     } else {
+     else
 	  return 0;
-     }
-
+     
      i = pos;
      p = PARENT(i);
      while((i > 0) && (compare_saturation(g, pq->heap[p], pq->heap[i]) < 0)){
+	  SWAP(pq->node_pos[pq->heap[p]->node],
+	       pq->node_pos[pq->heap[i]->node]); /* SWAP the positions*/
 	  SWAP(pq->heap[p], pq->heap[i]);
 	  i = p;
 	  p = PARENT(i);
@@ -433,27 +362,29 @@ static long increase_key(const struct graph *g, pqueue_t *pq, long node, long co
      return 0;
 }
 
-static void init_saturation_pq(const struct graph *g, pqueue_t *pq)
+static void init_saturation_pq(const struct graph_adj *g, pqueue_t *pq)
 {
-     long i, n;
+     int i, n;
      saturation_t *ns;
-     size_t alloc;
-
+     
      n = g->n_nodes;
      for (i = 0; i < n; i++) {
 	  ns = (saturation_t *)xmalloc(sizeof(saturation_t));
 	  ns->node = i;
 	  ns->n_adj_colors = 0;
-	  alloc = n*sizeof(bool)+1;
-	  ns->color_used = xmalloc(alloc);
-	  memset(ns->color_used, false, alloc);
-	  pq_insert(g, pq, ns);
+	  ns->color_used = RB_ROOT;
+	  pq_insert(g, pq, ns);	  
+     }
+     assert(pq->size == n);
+     pq->node_pos = (int *)xmalloc(n*sizeof(int));
+     for (i = 0; i < n; i++) {
+	  pq->node_pos[pq->heap[i]->node] = i;
      }
 }
 
-static inline long get_color(const struct node_ptr_array *node_color, long pos)
+static inline int get_color(const struct node_ptr_array *node_color, int pos)
 {
-     long color;
+     int color;
      struct node *node_ptr;
 
      if (pos < 0)
@@ -468,48 +399,52 @@ static inline long get_color(const struct node_ptr_array *node_color, long pos)
      }
      return color;
 }
-
-static bool *get_ady_used_color(const struct graph *g, 
-				const struct node_ptr_array *node_color, long node)
+ 
+static bool *get_ady_used_color(const struct graph_adj *g, 
+				const struct node_ptr_array *node_color, int node)
 {
-     struct edge_list *tmp;
+     struct arc *current;
      bool *color_used;
-     long color;
+     int color;
      size_t alloc;
 
      alloc = g->n_nodes*sizeof(bool)+1;
      color_used = xmalloc(alloc);
      memset(color_used, false, alloc);
-     adj_for_each(tmp, g->adj_list[node]) {
-	  color = get_color(node_color, tmp->item.to);
+     current = g->adj_list[node];
+     while (current != NULL) {
+	  color = get_color(node_color, current->to);
 	  assert(color < g->n_nodes);
 	  if (color != NOCOLOR) {
 	       color_used[color] = true;
 	  }
+	  current = current->next;
      }
      return color_used;
 }
 
-static void update_saturation_degree(const struct graph *g, pqueue_t *pq, 
-				     long node, const struct node_ptr_array *node_color)
+static void update_saturation_degree(const struct graph_adj *g, pqueue_t *pq, 
+				     int node, const struct node_ptr_array *node_color)
 {
-     struct edge_list *tmp;
      int r;
-     long color;
+     int color;
+     struct arc *current;
      
      color = get_color(node_color, node);
      assert(color != NOCOLOR);
-     adj_for_each(tmp, g->adj_list[node]) {
-	  r = increase_key(g, pq, tmp->item.to, color);
+     current = g->adj_list[node];
+     while(current != NULL) {
+	  r = increase_key(g, pq, current->to, color);
 	  if (r == -1)
 	       fatal("Error in update saturation degree\n");
+	  current = current->next;
      }
 }
 
-static long greatest_saturation_node(const struct graph *g, pqueue_t *pq, 
-				     const struct node_ptr_array *node_color)
+static int greatest_saturation_node(const struct graph_adj *g, pqueue_t *pq, 
+				    const struct node_ptr_array *node_color)
 {
-     long r, color, node;
+     int r, color, node;
      saturation_t *ns;
 
      node = NONODE;
@@ -526,21 +461,20 @@ static long greatest_saturation_node(const struct graph *g, pqueue_t *pq,
      }
      if (color != NOCOLOR)
 	  fatal("Error in node to coloring");
-     
 #ifdef PRGDEBUG
-     printf("Node %ld degree %ld din %ld\n",node, ns->n_adj_colors, g->degree[node].din);
+     printf("Node %d degree %d din %d\n",node, ns->n_adj_colors, g->degree[node].din);
 #endif
      free_saturation_node(ns); 
      return node;
 }
 
-static void get_free_colors(const struct graph *g, const struct node_ptr_array *solution,
-			    long node, struct long_array *available_colors,
+static void get_free_colors(const struct graph_adj *g, const struct node_ptr_array *solution,
+			    int node, struct int_array *available_colors,
 			    struct color_ptr_array *partitions)
 {
-     long i, cn, n;
+     int i, cn, n;
      bool *color_used;
-     long color_no_used;
+     int color_no_used;
      struct color *ctmp;
 
      n = partitions->nr;
@@ -556,7 +490,7 @@ static void get_free_colors(const struct graph *g, const struct node_ptr_array *
 	  ctmp = partitions->data[i];
 	  assert(ctmp->id == i);
 	  if (!color_used[i]) {
-	      available_colors->data[available_colors->nr++] = i;
+	       available_colors->data[available_colors->nr++] = i;
 	  }
      }
      if (available_colors->nr == 0)
@@ -564,11 +498,11 @@ static void get_free_colors(const struct graph *g, const struct node_ptr_array *
      free(color_used);
 }
 
-static inline struct color *new_color(long id, double sim_e1, double sim_e2, 
-				      double sim_bt, long node, long e1, long e2)
+static inline struct color *new_color(int id, double sim_e1, double sim_e2, 
+				      double sim_bt, int node, int e1, int e2)
 {
      struct color *new;
-     struct long_array aux = {0, 0, NULL};
+     struct int_array aux = {0, 0, NULL};
 
      new = xcalloc(1, sizeof(struct color));
      new->id = id;
@@ -595,7 +529,7 @@ static void free_color(struct color *c)
 
 static double get_partition_similarity(struct color *c)
 {
-     long n, m;
+     int n, m;
      double bpe, annt1, annt2;
 
      n = c->entities1.nr;
@@ -617,23 +551,16 @@ static double get_partition_similarity(struct color *c)
 }
 
 
-static double density_total_add(void *object, struct color_ptr_array *partitions,
+static double density_total_add(struct color_ptr_array *partitions,
 				struct node *new_node, 
-				const struct long_array *v1,
-				const struct long_array *v2, 
-				long color, bool matrix)
+				const struct int_array *v1,
+				const struct int_array *v2, 
+				int color)
 {
-     long i, n, m, e1, e2, ep, n_colors;
+     int i, n, m, e1, e2, ep, n_colors;
      struct color *cptr;
      double annt1_nc, annt2_nc, bpe_nc, dt, sim, bpe, annt1, annt2;
-     struct graph *g = NULL;
-     double **M = NULL;
-
-     if (matrix)
-	  M = (double **)object;
-     else
-	  g = (struct graph *)object;
-
+     
      dt = 0.0;
      cptr = partitions->data[color];
      assert(cptr->id == color);
@@ -642,10 +569,7 @@ static double density_total_add(void *object, struct color_ptr_array *partitions
      annt1_nc = 0.0;
      for (i = 0; i < n; i++) {
 	  ep = cptr->entities1.data[i];
-	  if (matrix)
-	       annt1_nc += M[ep][e1];
-	  else
-	       annt1_nc += get_similarity(g, ep, e1);
+	  annt1_nc += similarity(ep, e1);
      }
 
      n = cptr->entities2.nr;
@@ -653,10 +577,7 @@ static double density_total_add(void *object, struct color_ptr_array *partitions
      annt2_nc = 0.0;
      for (i = 0; i < n; i++) {
 	  ep = cptr->entities2.data[i];
-	  if (matrix)
-	       annt2_nc += M[ep][e2];
-	  else
-	       annt2_nc += get_similarity(g, ep, e2);
+	  annt2_nc += similarity(ep, e2);
      }
      bpe_nc = cptr->sim_between;
      n_colors = partitions->nr;
@@ -691,7 +612,7 @@ static double density_total_add(void *object, struct color_ptr_array *partitions
 
 static double density_total(struct color_ptr_array *partitions)
 {
-     long i, n_colors;
+     int i, n_colors;
      double dt;
      struct color *c;
 
@@ -705,13 +626,13 @@ static double density_total(struct color_ptr_array *partitions)
      return dt;
 }
 
-static long get_color_of_minimum_density(void *object, const struct node_ptr_array *vn,
-					 struct color_ptr_array *partitions,
-					 long new_node, struct long_array *free_colors,
-					 const struct long_array *v1, 
-					 const struct long_array *v2, bool matrix)
+static int get_color_of_minimum_density(const struct node_ptr_array *vn,
+					struct color_ptr_array *partitions,
+					int new_node, struct int_array *free_colors,
+					const struct int_array *v1, 
+					const struct int_array *v2)
 {
-     long i, n, best_color, n_colors, new_color;
+     int i, n, best_color, n_colors, new_color;
      double nc_best, nc, current_density;
      struct node *nptr;
 
@@ -724,12 +645,12 @@ static long get_color_of_minimum_density(void *object, const struct node_ptr_arr
      for (i = 0; i < n; i++) {
 	  new_color = free_colors->data[i];
 	  assert((new_color >= 0) && (new_color <= n_colors));
-	  DEBUG("Color to evaluate %ld ", new_color);
+	  DEBUG("Color to evaluate %d ", new_color);
 	  if (n_colors == new_color) {
 	       /* mew color */
 	       nc = (double)(current_density + (1.0 - nptr->sim/3.0)) / (n_colors+1.0);
 	  } else {
-	       nc = (double)density_total_add(object, partitions, nptr, v1, v2, new_color, matrix)/n_colors;
+	       nc = (double)density_total_add(partitions, nptr, v1, v2, new_color)/n_colors;
 	  }
 	  if (nc_best > nc) {
 	       nc_best = nc;
@@ -747,27 +668,17 @@ static long get_color_of_minimum_density(void *object, const struct node_ptr_arr
      return best_color;
 }
 
-static double compute_pairwise_sim(void *object, const struct long_array *v, bool matrix)
+static double compute_pairwise_sim(const struct int_array *v)
 {
-     long i, j, n, m;
+     int i, j, n, m;
      double sim;
-     double **M = NULL;
-     struct graph *g = NULL;
 
-     if (matrix)
-	  M = (double **)object;
-     else
-	  g = (struct graph *)object;
      sim = 0.0;
      m = v->nr;
      n = m - 1;
      for (i = 0; i < n; i++)  {
 	  for (j = i+1; j < m; j++) {
-	       if (matrix) {
-		    sim += M[v->data[i]][v->data[j]];
-	       } else {
-		    sim += get_similarity(g, v->data[i], v->data[j]);
-	       }
+	       sim += similarity(v->data[i], v->data[j]);
 	  }
      }
      return sim;
@@ -776,7 +687,7 @@ static double compute_pairwise_sim(void *object, const struct long_array *v, boo
 /*
  * Return true if the entity was added
  */
-static bool add_if_not_contains(struct long_array *v, long entity)
+static bool add_if_not_contains(struct int_array *v, int entity)
 {
      for (unsigned i = 0; i < v->nr; i++) {
 	  if (v->data[i] == entity)
@@ -786,11 +697,11 @@ static bool add_if_not_contains(struct long_array *v, long entity)
      return true;
 }
 
-static void set_colors(void *object, struct color_ptr_array *partitions, 
-		       long color, struct node *nptr,
-		       const struct long_array *v1, const struct long_array *v2, bool matrix)
+static void set_colors(struct color_ptr_array *partitions, 
+		       int color, struct node *nptr,
+		       const struct int_array *v1, const struct int_array *v2)
 {
-     long n_colors, e1, e2;
+     int n_colors, e1, e2;
      struct color *cptr;
      bool added;
 
@@ -812,12 +723,12 @@ static void set_colors(void *object, struct color_ptr_array *partitions,
 	  e1 = v1->data[nptr->pos1];
 	  added = add_if_not_contains(&cptr->entities1, e1);
 	  if (added)
-	       cptr->sim_entity_1 = compute_pairwise_sim(object, &cptr->entities1, matrix);
+	       cptr->sim_entity_1 = compute_pairwise_sim(&cptr->entities1);
 
 	  e2 = v2->data[nptr->pos2];
 	  added = add_if_not_contains(&cptr->entities2, e2);
 	  if (added)
-	       cptr->sim_entity_2 = compute_pairwise_sim(object, &cptr->entities2, matrix);
+	       cptr->sim_entity_2 = compute_pairwise_sim(&cptr->entities2);
 
 	  cptr->sim_between += nptr->sim;
 	  nptr->cp = cptr;
@@ -826,23 +737,23 @@ static void set_colors(void *object, struct color_ptr_array *partitions,
      }
 }
 
-static void coloring(void *object, const struct graph *g, 
+static void coloring(const struct graph_adj *g, 
 		     const struct node_ptr_array *nodes,
 		     struct color_ptr_array *partitions, 
-		     const struct long_array *v1, 
-		     const struct long_array *v2, bool matrix)
+		     const struct int_array *v1, 
+		     const struct int_array *v2)
 {
      struct color *cptr;
      struct node *nptr;
-     long colored_nodes, new_node, e1, e2, color;
+     int colored_nodes, new_node, e1, e2, color;
      pqueue_t pq_saturation;
-     struct long_array free_colors = {0, 0, NULL};
-     
+     struct int_array free_colors = {0, 0, NULL};
+	  
      colored_nodes = 0;
      ALLOC_GROW(free_colors.data, (unsigned)g->n_nodes, free_colors.alloc);
      pq_init(&pq_saturation);
      init_saturation_pq(g, &pq_saturation);
-
+     
      if (partitions->nr == 0)  {
 	  new_node = greatest_saturation_node(g, &pq_saturation, nodes);
 	  if (new_node == NONODE)
@@ -868,10 +779,11 @@ static void coloring(void *object, const struct graph *g,
 	  free_colors.nr = 0;
 	  get_free_colors(g, nodes, new_node, &free_colors, partitions);
 #ifdef PRGDEBUG
-	  print_vec_long(&free_colors);
+	  printf("Free colors:\n");
+	  print_int_array(&free_colors);
 #endif
-	  color = get_color_of_minimum_density(object, nodes, partitions, new_node, &free_colors, v1, v2, matrix);
-	  set_colors(object, partitions, color, nptr, v1, v2, matrix);
+	  color = get_color_of_minimum_density(nodes, partitions, new_node, &free_colors, v1, v2);
+	  set_colors(partitions, color, nptr, v1, v2);
 	  colored_nodes++;
 	  if (pq_saturation.size != 0)
 	       update_saturation_degree(g, &pq_saturation, new_node, nodes);
@@ -887,8 +799,8 @@ static void print_coloring(struct color_ptr_array *partitions)
      struct color *c;
      for (unsigned i = 0; i < partitions->nr; i++) {
 	  c = partitions->data[i];
-	  assert(c->id == i);
-	  printf("%ld %.4f %.4f %.4f %zu %zu %zu\n", 
+	  assert((unsigned)c->id == i);
+	  printf("%d %.4f %.4f %.4f %u %u %u\n", 
 		 c->id, c->sim_entity_1, c->sim_entity_2, c->sim_between, 
 		 c->id_nodes.nr, c->entities1.nr, c->entities2.nr);
      }
@@ -897,7 +809,7 @@ static void print_coloring(struct color_ptr_array *partitions)
 
 static double get_density_average(struct color_ptr_array *partitions)
 {
-     long i, n_colors;
+     int i, n_colors;
      double dt;
      struct color *c;
 
@@ -908,9 +820,8 @@ static double get_density_average(struct color_ptr_array *partitions)
 	  c = partitions->data[i];
 	  dt += (get_partition_similarity(c)/3.0);;
      }
-     assert(dt/n_colors <= 1.0);
      return dt / partitions->nr;
- }
+}
 
 /*************************************
  *************************************
@@ -919,27 +830,6 @@ static double get_density_average(struct color_ptr_array *partitions)
  **
  ************************************
  ************************************/
-
-static void init_prediction_array(prediction_partition_t *a, unsigned n)
-{
-     a->pred = xmalloc(n * sizeof(*(a->pred)));
-     for (unsigned i = 0; i < n; i++) {
-	  a->pred[i].alloc = 0;
-	  a->pred[i].nr = 0;
-	  a->pred[i].data = NULL; 
-     }
-     a->nr = n;
-}
-
-static void free_prediction_array(prediction_partition_t *a)
-{
-     for (unsigned i = 0; i < a->nr; i++) {
-	  free(a->pred[i].data);
-	  a->pred[i].nr = 0;
-	  a->pred[i].alloc = 0;
-     }
-     free(a->pred);
-}
 
 static void free_hash_map_item(struct hash_map *hmap)
 {
@@ -955,54 +845,51 @@ static void free_hash_map_item(struct hash_map *hmap)
      hmap_destroy(hmap);
 }
 
-static double get_cluster_probability(long nodes1, long nodes2, long n_edges)
+static double get_cluster_probability(int nodes1, int nodes2, int n_edges)
 {
-     long n_nodes = nodes1 * nodes2;
+     int n_nodes = nodes1 * nodes2;
+
      if (n_nodes == 0)
 	  fatal("Zero Division");
      return (double)n_edges / n_nodes;
 }
 
-static void get_predicted_links(prediction_partition_t *cluster_pred,
+static void get_predicted_links(prediction_array_t *cluster_pred,
 				struct node_ptr_array *color_nodes,
 				struct color_ptr_array *partitions,
-				const struct long_array *v1, const struct long_array *v2)
+				const struct int_array *v1, const struct int_array *v2)
 {
-     unsigned i, j, k, n_links, m, n, n_clusters;
-     struct hash_map edges_obs[partitions->nr];
+     unsigned int i, j, k, n_links, m, n, n_clusters;
+     struct hash_map edges_obs;
      struct hash_entry *hentry;
      char *buf;
      item_entry_t *item;
-     int l;
      struct node *edge;
      struct color *cluster;
-     long node1, node2;
+     int node1, node2, l;
      prediction_t ptemp;
-     long n_edges[partitions->nr];
+     int n_edges[partitions->nr];
      double prob;
 
      n_clusters = partitions->nr;
      n_links = color_nodes->nr;
-     for (i = 0; i < n_clusters; i++) {
-	  hmap_create(&edges_obs[i], n_links);
-	  n_edges[i] = 0;
-     }
+     hmap_create(&edges_obs, 2*n_links+1);
+     memset(n_edges, 0, partitions->nr*sizeof(int));     
      for (i = 0; i < n_links; i++) {
 	  edge = color_nodes->data[i];
-	  l = asprintf(&buf, "%ld-%ld", v1->data[edge->pos1], v2->data[edge->pos2]);
+	  l = asprintf(&buf, "%d-%d-%d", edge->cp->id, v1->data[edge->pos1], v2->data[edge->pos2]);
 	  if (l == -1)
 	       fatal("Error in edge key creation");
-	  assert((unsigned)l == strlen(buf));
 	  item = (item_entry_t *)xmalloc(sizeof(item_entry_t));
-	  assert(edge->cp->id <= n_clusters); 
+	  assert((unsigned)edge->cp->id <= n_clusters); 
 	  n_edges[edge->cp->id]++;
-	  if (hmap_add_if_not_member(&edges_obs[edge->cp->id], &item->entry, buf, l) != NULL)
+	  if (hmap_add_if_not_member(&edges_obs, &item->entry, buf, l) != NULL)
 	       fatal("Error, repeat edge in bipartite graph\n");
 	  free(buf);
      }
-
      for (i = 0; i < n_clusters; i++) {
 	  cluster = partitions->data[i];
+	  assert((unsigned)cluster->id == i);
 	  n = cluster->entities1.nr;
 	  m = cluster->entities2.nr;
 	  prob = get_cluster_probability(n, m, n_edges[i]);
@@ -1011,55 +898,51 @@ static void get_predicted_links(prediction_partition_t *cluster_pred,
 	       node1 = cluster->entities1.data[j];
 	       for (k = 0; k < m; k++) {
 		    node2 = cluster->entities2.data[k];
-		    l = asprintf(&buf, "%ld-%ld",node1, node2);
+		    l = asprintf(&buf, "%d-%d-%d", i, node1, node2);
 		    if (l == -1)
-			 fatal("Error in make a new link");
-		    assert((unsigned)l == strlen(buf));
-		    hentry = hmap_find_member(&edges_obs[i], buf, l);
+			 fatal("Error in made a new link");
+		    hentry = hmap_find_member(&edges_obs, buf, l);
 		    if (hentry == NULL) {
+			 ptemp.cluster = i;
 			 ptemp.entity1 = node1;
 			 ptemp.entity2 = node2;
 			 ptemp.prob = prob;
-			 ARRAY_PUSH(cluster_pred->pred[i], ptemp);
+			 ARRAY_PUSH(*cluster_pred, ptemp);
 		    }
 		    free(buf);
 	       }
 	  }
      }
-     for (i = 0; i < n_clusters; i++)
-	  free_hash_map_item(&edges_obs[i]);
+     free_hash_map_item(&edges_obs);
 }
 
-static void print_predicted_links(prediction_partition_t *cluster_pred,
-				  double threshold_E1, double threshold_E2,
-				  const char name1[], const char name2[], char **desc)
+static void print_predicted_links(prediction_array_t *cluster_pred,
+				  double threshold_lf, double threshold_rg,
+				  const char *name, char **desc)
 {
-     unsigned i, j, n;
+     unsigned i, n;
      prediction_t ptemp;
      FILE *f;
      char *output;
-     long cont = 0;
-
-     if (asprintf(&output, "%s-%s-%.4f-%.4f-Pred.txt",
-		  name1, name2, threshold_E1, threshold_E2) == -1)
+     int current;
+     
+     if (asprintf(&output, "%s-%.4f-%.4f-Predictions.txt", name, threshold_lf, threshold_rg) == -1)
 	  fatal("Error in prediction file");
      f = fopen(output, "w");
      free(output);
      if (!f)
 	  fatal("No descriptor file specified, abort\n");
-
-     for (i = 0; i < cluster_pred->nr; i++) {
-	  n = cluster_pred->pred[i].nr;
-	  if (n > 0) {
-	       fprintf(f, "Cluster\t%u\n", i);
-	       cont += n;
+     n = cluster_pred->nr;
+     current = NOCLUSTER;
+     for (i = 0; i < n; i++) {
+	  ptemp = cluster_pred->data[i];
+	  if (current != ptemp.cluster) {
+	       current = ptemp.cluster;
+	       fprintf(f, "Cluster\t%u\n", current);
 	  }
-	  for (j = 0; j < n; j++) {
-	       ptemp = cluster_pred->pred[i].data[j];
-	       fprintf(f, "%s\t%s\t%.4f\n", desc[ptemp.entity1], desc[ptemp.entity2], ptemp.prob);
-	  }
+	  fprintf(f, "%s\t%s\t%.4f\n", desc[ptemp.entity1], desc[ptemp.entity2], ptemp.prob);
      }
-     printf("Number of links predicted: %ld\n", cont);
+     printf("Number of links predicted: %d\n", n);
      fclose(f);
 }
 
@@ -1071,25 +954,11 @@ static void print_predicted_links(prediction_partition_t *cluster_pred,
  ************************************
  ************************************/
 
-static unsigned print_singleton(FILE *f, bool *in_v, const struct long_array *v, char **desc)
-{
-     unsigned i, n;
-     
-     n = 0;
-     for (i = 0; i < v->nr; i++) {
-	  if (!in_v[i]) {
-	       fprintf(f ,"%s\n", desc[v->data[i]]);
-	       n++;
-	  }
-     }
-     return n;
-}
-
 static char *print_output_files(struct node_ptr_array *color_nodes,
 				struct color_ptr_array *partitions,
-				const struct long_array *v1, const struct long_array *v2,
-				double threshold_E1, double threshold_E2,
-				const char name1[], const char name2[], char **desc)
+				const struct int_array *v1, const struct int_array *v2,
+				double threshold_lf, double threshold_rg,
+				const char *name, char **desc)
 {
      FILE *f;
      unsigned i, j, n, m;
@@ -1097,52 +966,28 @@ static char *print_output_files(struct node_ptr_array *color_nodes,
      struct stat st;
      struct node *edge;
      struct color *cluster;
-     long id_node;
-     bool *in_v1, *in_v2; 
-
-     if (asprintf(&output1, "%s-%s-%.4f-%.4f-Subgr", name1, name2, threshold_E1, threshold_E2) == -1)
+     int id_node;
+    
+     if (asprintf(&output1, "%s-%.4f-%.4f-Clusters", name, threshold_lf, threshold_rg) == -1)
 	  fatal("Error in output directory");
      if (stat(output1, &st) == -1)
 	  mkdir(output1, 0700);
-
-     if (asprintf(&output2, "%s-%s-%.4f-%.4f.txt", name1, name2, threshold_E1, threshold_E2) == -1)
-	  fatal("Error in output file");
-
-     if (asprintf(&message, "Output files:\n\t%s\n\t%s\n", output1, output2) == -1)
+ 
+     if (asprintf(&message, "Cluster directory: %s\n", output1) == -1)
 	  fatal("Error in output message");
-     
-     f = fopen(output2, "w");
-     free(output2);
-
-     in_v1 = (bool *)xcalloc(v1->nr, sizeof(bool));
-     memset(in_v1, false, v1->nr*sizeof(bool));
-     in_v2 = (bool *)xcalloc(v2->nr, sizeof(bool));
-     memset(in_v2, false, v2->nr*sizeof(bool));
-
-     if (!f)
-	  fatal("No descriptor file specified, abort\n");
-     for (i = 0; i < color_nodes->nr; i++) {
-	  edge = color_nodes->data[i];
-	  fprintf(f ,"%s\t%s\t%.4f\n", 
-		  desc[v1->data[edge->pos1]],
-		  desc[v2->data[edge->pos2]], edge->sim);
-	  in_v1[edge->pos1] = true;
-	  in_v2[edge->pos2] = true;
-     }
-     n = print_singleton(f, in_v1, v1, desc);
-     m = print_singleton(f, in_v2, v2, desc);
-     fclose(f);
 
      printf("Number of partitions: %u\n", partitions->nr);
-     for (i = 0; i < partitions->nr; i++) {
+     n = partitions->nr;
+     for (i = 0; i < n; i++) {
 	  cluster = partitions->data[i];
-	  if (asprintf(&output2, "%s/%s-%s-%u-%.4f-%.4f.txt",
-		       output1, name1, name2, i, threshold_E1, threshold_E2) == -1)
+	  if (asprintf(&output2, "%s/%s-%u-%.4f-%.4f.txt",
+		       output1, name, i, threshold_lf, threshold_rg) == -1)
 	       fatal("Error in cluster file");
           f = fopen(output2, "w");
 	  if (!f)
 	       fatal("No descriptor file specified, abort\n");
-	  for (j = 0; j < cluster->id_nodes.nr; j++) {
+	  m = cluster->id_nodes.nr;
+	  for (j = 0; j < m; j++) {
 	       id_node = cluster->id_nodes.data[j];
 	       edge = color_nodes->data[id_node];
 	       assert(cluster->id == edge->cp->id);
@@ -1153,110 +998,54 @@ static char *print_output_files(struct node_ptr_array *color_nodes,
 	  fclose(f);
 	  free(output2);
      }
-
-     /* Print a file with the singleton nodes */
-     if ((n+m) > 0) {  
-	  if (asprintf(&output2, "%s/%s-%s-%.4f-%.4f-singleton.txt", 
-		       output1, name1, name2, threshold_E1, threshold_E2) == -1)
-	       fatal("Error in singleton file");
-	  f = fopen(output2, "w");
-	  if (!f)
-	       fatal("No descriptor file specified, abort\n");
-	  print_singleton(f, in_v1, v1, desc);
-	  print_singleton(f, in_v2, v2, desc);
-	  fclose(f);
-	  free(output2);
-     }
-     free(in_v1);
-     free(in_v2);
      free(output1);
-
      return message;
 }
 
 /*************************************
  *************************************
  **
- **  Partition detection solver
+ **  Solver
  **
  ************************************
  ************************************/
 
-double annotation_partition(void *object, long n_nodes,
-			    const struct long_array *v1, const struct long_array *v2,
-			    double threshold_E1, double threshold_E2,
-			    double threshold_bt, const char name1[], const char name2[],
-			    char **desc, bool prediction, bool matrix, enum measure d)
-{
-     struct graph gc;
-     bool *in_term1, *in_term2;
-     unsigned i;
-     double **sim_mat, **simM1, **simM2;
-     struct graph *g;
-     clock_t ti, tf;
-     struct lpairs nd1, nd2;
-     long max_depth;
-     char *message;
-     double sim;
-     prediction_partition_t cluster_pred;
-     struct color_ptr_array partitions = {0, 0, NULL};
-     struct node_ptr_array color_nodes = {0, 0, NULL};
- 
-     ti = clock();
-     sim_mat = NULL;
-     simM1 = NULL;
-     simM2 = NULL;
-     sim = 0.0;
+double semEP_solver(const struct matrix *lmatrix, const struct matrix *rmatrix,
+		    const struct int_array *lterms, const struct int_array *rterms,
+		    const struct string_array *desc, struct node_ptr_array *color_nodes,
+		    double lthreshold, double rthreshold, const char *bpgraph_name)
 
-     if (matrix) {
-	  sim_mat = (double **)object;
-     } else {
-	  g = (struct graph *)object;
-	  init_metric_data(g);
-	  if (d == DTAX) {
-	       metricPtr = &sim_dtax;
-	  } else if (d == DPS) {
-	       metricPtr = &sim_dps;
-	  } else {
-	       nd1 = get_max_group_depth(v1);
-	       nd2 = get_max_group_depth(v2);
-	       max_depth = MAX(nd1.y, nd2.y);
-	       if (max_depth == nd1.y)
-		    printf("Deepest node in the annotations is %s with depth %ld\n", desc[nd1.x], nd1.y);
-	       else 
-		    printf("Deepest node in the annotations is %s with depth %ld\n", desc[nd2.x], nd2.y);
-	       set_max_depth(max_depth);
-	       metricPtr = &sim_str;
-	  }
-	  simM1 = similarity_between_all(g, v1);
-	  simM2 = similarity_between_all(g, v2);
-     }
+{
+     struct graph_adj gc;
+     unsigned i;
+     clock_t ti, tf;
+     char *message;
+     double density;
+     prediction_array_t cluster_pred = {0, 0, NULL};
+     struct color_ptr_array partitions = {0, 0, NULL};
      
-     in_term1 = nodes_in_the_term(v1, n_nodes);
-     in_term2 = nodes_in_the_term(v2, n_nodes);
-     compute_color_nodes(object, v1, v2, &color_nodes, threshold_bt, in_term1, in_term2, matrix);
-     free(in_term1);
-     free(in_term2);
-     init_graph(&gc, color_nodes.nr);
-     if (matrix) {
-	  build_graph_to_coloring_matrix(&gc, &color_nodes, sim_mat, v1, v2, threshold_E1, threshold_E2);
-     } else {
-	  build_graph_to_coloring_graph(&gc, &color_nodes, simM1, simM2, threshold_E1, threshold_E2);
-	  free_double_matrix(simM1, 0, 0);
-	  free_double_matrix(simM2, 0, 0);
-     }
-     tf = clock();
+     ti = clock();
+     density = 0.0;
+     ML =  lmatrix->data;
+     sl = lmatrix->start;
+     el = lmatrix->end;
+     MR =  rmatrix->data;
+     sr = rmatrix->start;
+     er = rmatrix->end;
+     init_graph_adj(&gc, color_nodes->nr);
      printf("Bipartite Graph data - Nodes A: %u; Nodes B: %u; Edges: %u\n",
-	    v1->nr, v2->nr, color_nodes.nr);
+	    	    lterms->nr, rterms->nr, color_nodes->nr);
+     build_graph_to_coloring_matrix(&gc, color_nodes, lterms, rterms, lthreshold, rthreshold);
+     tf = clock();
      printf("Time to build the graph to coloring: %.3f secs\n", (double)(tf-ti)/CLOCKS_PER_SEC);
 #ifdef PRGDEBUG
-     print_graph(&gc);
+     print_graph_adj(&gc);
 #endif
-     printf("Graph to Coloring - Nodes: %ld; Edges: %ld\n", gc.n_nodes, gc.n_edges/2);
+     printf("Graph to Coloring - Nodes: %d; Edges: %d\n", gc.n_nodes, gc.n_arcs/2);
      ti = clock();
      if (gc.n_nodes != 0) {
-	  coloring(object, &gc, &color_nodes, &partitions, v1, v2, matrix);
-	  sim = get_density_average(&partitions);
+	  coloring(&gc, color_nodes, &partitions, lterms, rterms);
+	  density = get_density_average(&partitions);
 #ifdef PRGDEBUG
 	  print_coloring(&partitions);
 #endif
@@ -1265,30 +1054,17 @@ double annotation_partition(void *object, long n_nodes,
      }
      tf = clock();
      printf("Coloring solver time %.3f secs\n", (double)(tf-ti)/CLOCKS_PER_SEC);
-     message = print_output_files(&color_nodes, &partitions, v1, v2, 
-				  threshold_E1, threshold_E2, name1, name2, desc);
+     message = print_output_files(color_nodes, &partitions, lterms, rterms, 
+				  lthreshold, rthreshold, bpgraph_name, desc->data);
      printf("%s", message);
-     if (prediction) {
-	  init_prediction_array(&cluster_pred, partitions.nr);
-	  get_predicted_links(&cluster_pred, &color_nodes, &partitions, v1, v2);
-	  print_predicted_links(&cluster_pred, threshold_E1, threshold_E2, name1, name2, desc);
-	  free_prediction_array(&cluster_pred);
-     }
-
-     /*
-      * free all memory allocated
-      */
+     get_predicted_links(&cluster_pred, color_nodes, &partitions, lterms, rterms);
+     print_predicted_links(&cluster_pred, lthreshold, rthreshold, bpgraph_name, desc->data);
+     free_array(cluster_pred);
      free(message);
-     if (!matrix) {
-	  free_metric();
-     }
      for (i = 0; i < partitions.nr; i++)
 	  free_color(partitions.data[i]);
      free(partitions.data);
-     for (i = 0; i < color_nodes.nr; i++)
-	  free(color_nodes.data[i]);
-     free(color_nodes.data);
-     free_graph(&gc);
+     free_graph_adj(&gc);
 
-     return sim;
+     return density;
 }

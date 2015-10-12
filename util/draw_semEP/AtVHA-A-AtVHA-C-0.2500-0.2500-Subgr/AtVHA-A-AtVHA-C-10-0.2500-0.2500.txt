@@ -1,7 +1,0 @@
-glycolysis	root hair cell differentiation	0.2727
-glycolysis	unidimensional cell growth	0.3333
-glycolysis	cell tip growth	0.3000
-glycolysis	ATP hydrolysis coupled proton transport	0.3333
-glycolysis	Golgi organization	0.4000
-glycolysis	vacuole organization	0.4000
-glycolysis	cell growth	0.3750

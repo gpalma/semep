@@ -7,7 +7,8 @@ DFLAGS=
 #DFLAGS=		-DPRGDEBUG
 
 PROG=		semEP
-SOLVER=		util.c types.c graph.c hash_map.c CA.c metric.c semEP.c input.c main.c
+
+SOLVER=		util.c rbtree.c graph_adj.c hash_map.c input.c semEP.c main.c
 LIBS=		-lm
 SOLVEROBJS=	$(SOLVER:.c=.o)
 

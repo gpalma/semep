@@ -1,5 +1,5 @@
 /**
- * Copyright 2010 (C), Universidad Simon Bolivar
+ * Copyright 2010-2015 (C), Universidad Simon Bolivar
  *
  * @brief Generic hash table
  * Copying: GNU GENERAL PUBLIC LICENSE Version 2
@@ -14,27 +14,27 @@
 #include "hash_function.h"
 
 struct hash_entry {
-  char                *key;
-  unsigned int        keylen;
-  unsigned int        hash;
-  struct hlist_node   head;
+     char                *key;
+     unsigned int        keylen;
+     unsigned int        hash;
+     struct hlist_node   head;
 };
 
 struct hash_item {
-  unsigned int        key;
-  unsigned int        hash;
-  struct hlist_node   head;
+     unsigned int        key;
+     unsigned int        hash;
+     struct hlist_node   head;
 };
 
 struct hash_map {
-  unsigned int       fill;
-  unsigned int       buckets;
-  int                next_prime;
-  struct hlist_head  *table;
+     unsigned int       fill;
+     unsigned int       buckets;
+     int                next_prime;
+     struct hlist_head  *table;
 
-  /* private variables */
-  unsigned int       i;
-  struct hlist_node  *pos;
+     /* private variables */
+     unsigned int       i;
+     struct hlist_node  *pos;
 };
 
 /**
@@ -45,27 +45,27 @@ struct hash_map {
  */
 #define hash_entry(_ptr, _type, _member) container_of(_ptr, _type, _member)
 /*#define hash_entry(ptr, type, member)								\
-  ((type *)((char *)(ptr)-(unsigned long)(&((type *)0)->member)))*/
+  ((type *)((char *)(ptr)-(unsigned int)(&((type *)0)->member)))*/
 
 /**
  * @hentry: &struct hash_entry
  * @htable: &struct hash_table
  */
 #define hmap_for_each(hentry, htable)					\
-  for	((htable)->i=0; ((htable)->i < (htable)->buckets); ++((htable)->i)) \
-    for ( (htable)->pos = (&((htable)->table[(htable)->i]))->first;     \
-          (htable)->pos && ({ ; 1; }) && (hentry = hlist_entry((htable)->pos, struct hash_entry, head)); \
-          (htable)->pos = ((htable)->pos)->next )
+     for	((htable)->i=0; ((htable)->i < (htable)->buckets); ++((htable)->i)) \
+	  for ( (htable)->pos = (&((htable)->table[(htable)->i]))->first; \
+		(htable)->pos && ({ ; 1; }) && (hentry = hlist_entry((htable)->pos, struct hash_entry, head)); \
+		(htable)->pos = ((htable)->pos)->next )
 
 /**
  * @hitem: &struct hash_item
  * @htable: &struct hash_table
  */
 #define hmap_for_each_int(hitem, htable)				\
-  for	((htable)->i=0; ((htable)->i < (htable)->buckets); ++((htable)->i)) \
-    for ((htable)->pos = (&((htable)->table[(htable)->i]))->first;      \
-         (htable)->pos && ({ ; 1; }) && (hitem = hlist_entry((htable)->pos, struct hash_item, head)); \
-         (htable)->pos = ((htable)->pos)->next)
+     for	((htable)->i=0; ((htable)->i < (htable)->buckets); ++((htable)->i)) \
+	  for ((htable)->pos = (&((htable)->table[(htable)->i]))->first; \
+	       (htable)->pos && ({ ; 1; }) && (hitem = hlist_entry((htable)->pos, struct hash_item, head)); \
+	       (htable)->pos = ((htable)->pos)->next)
 
 /**
  * @hitem: &struct hash_item
@@ -73,11 +73,11 @@ struct hash_map {
  * @n       &struct hlist_node
  */
 #define hmap_for_each_safe(hentry, n, htable)				\
-  for	((htable)->i=0; ((htable)->i < (htable)->buckets); ++((htable)->i)) \
-    for ((htable)->pos = (&((htable)->table[(htable)->i]))->first;      \
-         (htable)->pos && ({ n = ((htable)->pos)->next; 1; }) &&        \
-             (hentry = hlist_entry((htable)->pos, struct hash_entry, head)); \
-         (htable)->pos = n)
+     for	((htable)->i=0; ((htable)->i < (htable)->buckets); ++((htable)->i)) \
+	  for ((htable)->pos = (&((htable)->table[(htable)->i]))->first; \
+	       (htable)->pos && ({ n = ((htable)->pos)->next; 1; }) &&	\
+		    (hentry = hlist_entry((htable)->pos, struct hash_entry, head)); \
+	       (htable)->pos = n)
 
 /**
  * @hitem: &struct hash_item
@@ -85,11 +85,11 @@ struct hash_map {
  * @n       &struct hlist_node
  */
 #define hmap_for_each_safe_int(hitem, n, htable)			\
-  for	((htable)->i=0; ((htable)->i < (htable)->buckets); ++((htable)->i)) \
-    for ((htable)->pos = (&((htable)->table[(htable)->i]))->first;      \
-         (htable)->pos && ({ n = ((htable)->pos)->next; 1; }) &&        \
-             (hitem = hlist_entry((htable)->pos, struct hash_item, head)); \
-         (htable)->pos = n)
+     for	((htable)->i=0; ((htable)->i < (htable)->buckets); ++((htable)->i)) \
+	  for ((htable)->pos = (&((htable)->table[(htable)->i]))->first; \
+	       (htable)->pos && ({ n = ((htable)->pos)->next; 1; }) &&	\
+		    (hitem = hlist_entry((htable)->pos, struct hash_item, head)); \
+	       (htable)->pos = n)
 
 
 #endif /* ___HASH_MAP_H */

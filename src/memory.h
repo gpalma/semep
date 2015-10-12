@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2011, 2015 Universidad Simón Bolívar
+ * Copyright (C) 2011-2015 Universidad Simón Bolívar
  *
  * @brief Wrappers for the C libraries allocation functions
  * Copying: GNU GENERAL PUBLIC LICENSE Version 2
@@ -10,8 +10,8 @@ static inline void *xmalloc(size_t size)
 {
      void *ptr = malloc(size);
      if (!ptr) {
-	  fprintf(stderr, "Out of memory, malloc failed tried to allocate %lu bytes\n",
-		  (unsigned long)size);
+	  fprintf(stderr, "Out of memory, malloc failed tried to allocate %u bytes\n",
+		  (unsigned int)size);
 	  exit(1);
      }
      return ptr;

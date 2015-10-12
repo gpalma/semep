@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2013, 2014, 2015 Universidad Simón Bolívar
+ * Copyright (C) 2013-2015 Universidad Simón Bolívar
  *
  * Copying: GNU GENERAL PUBLIC LICENSE Version 2
  * @author Guillermo Palma <gpalma@ldc.usb.ve>
@@ -8,20 +8,21 @@
 #ifndef ___INPUT_H
 #define ___INPUT_H
 
+#include "types.h"
+#include "semEP.h"
+
 struct input_data {
-     long n;
-     void *object;
-     struct long_array anntt1;
-     struct long_array anntt2;
-     char **descriptions;
+     struct matrix left_matrix;
+     struct matrix right_matrix;
+     struct int_array left_terms;
+     struct int_array right_terms;
+     struct string_array td;
+     struct node_ptr_array bpgraph;
 };
 
-struct input_data get_input_data(const char *graph_filename, 
-				 const char *desc_filename,
-				 const char *annt1_filename,
-				 const char *annt2_filename,
-				 bool matrix, bool description);
+struct input_data get_input_data(const char *matrix_left_filename, const char *matrix_right_filename,
+				 const char *left_filename, const char *right_filename, const char *graph_filename);
 
-void free_input_data(struct input_data *in, bool matrix);
+void free_input_data(struct input_data *in);
 
 #endif /* ___INPUT_H */

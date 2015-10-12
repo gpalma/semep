@@ -1,3 +1,0 @@
-cytoskeleton	cell cortex	0.4444
-cytoskeleton	cytoplasm	0.5556
-cytoskeleton	actin filament	0.7778
