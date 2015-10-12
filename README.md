@@ -17,7 +17,7 @@ Conference (ISWC 2013). Italy. 2014. [(PDF)](http://ldc.usb.ve/~gpalma/papers/se
 ## 2. Content
 
 * AUTHORS: list of contributors of the semEP project.
-* doc: Documentation abount semEP. 
+* doc: Documentation about semEP. 
 * LICENSE: GPL version 2.
 * Makefile: builds semEP.
 * README.md: this file.
