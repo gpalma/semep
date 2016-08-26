@@ -451,7 +451,7 @@ static int greatest_saturation_node(const struct graph_adj *g, pqueue_t *pq,
      ns = NULL;
      color = INFTY;
      r = extract_max(g, pq, &ns);
-     if (r == 1)
+     if (r == -1)
 	  fatal("No node without color");
      if (ns) {
 	  color = get_color(node_color, ns->node);
@@ -484,8 +484,10 @@ static void get_free_colors(const struct graph_adj *g, const struct node_ptr_arr
      assert(g->n_nodes >= color_no_used);
      color_used = get_ady_used_color(g, solution, node);
      cn = get_color(solution, node);
-     if ((cn != NOCOLOR) && (!color_used[cn])) /* any adjacent vertex has the same color */
-	  fatal("a adjacent node are using the same color");
+     if (cn != NOCOLOR)
+	  if (!color_used[cn]) /* any adjacent vertex has the same color */
+	       fatal("a adjacent node are using the same color");
+	  
      for (i = 0; i < n; i++) {
 	  ctmp = partitions->data[i];
 	  assert(ctmp->id == i);
@@ -579,11 +581,11 @@ static double density_total_add(struct color_ptr_array *partitions,
 	  ep = cptr->entities2.data[i];
 	  annt2_nc += similarity(ep, e2);
      }
-     bpe_nc = cptr->sim_between;
+     bpe_nc = new_node->sim;
      n_colors = partitions->nr;
      for (i = 0; i < n_colors; i++) {
-	  cptr = partitions->data[color];
-	  assert(cptr->id == color);
+	  cptr = partitions->data[i];
+	  assert(cptr->id == i);
 	  if (i == color) {
 	       n = cptr->entities1.nr + 1;
 	       m = cptr->entities2.nr + 1;
