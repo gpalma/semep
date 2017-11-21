@@ -149,9 +149,9 @@ I hope you find semEP an useful tool. Please, let me know
 any comment, problem, bug, or suggestion.
 
 
-[Guillermo Palma](http://www.ldc.usb.ve/~gpalma)
+[Guillermo Palma](https://gpalma.github.io/)
 
-[gpalma at ldc dot usb dot ve ](mailto:gpalma@ldc.usb.ve)
+[palma at l3s dot de ](mailto:palma@l3s.de)
 
 
 
