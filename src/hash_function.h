@@ -41,10 +41,13 @@ static inline unsigned int __hash_function(const char *key, unsigned int len)
 
   switch(len)
   {
-    case 3: h ^= data[2] << 16;
-    case 2: h ^= data[1] << 8;
-    case 1: h ^= data[0];
-      h *= m;
+       /*  fall through */
+  case 3: h ^= data[2] << 16;
+       /*  fall through */
+  case 2: h ^= data[1] << 8;
+       /*  fall through */
+  case 1: h ^= data[0];
+       h *= m;
   };
 
   /* Do a few final mixes of the hash to ensure the last few

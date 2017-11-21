@@ -403,22 +403,22 @@ static inline int get_color(const struct node_ptr_array *node_color, int pos)
 static bool *get_ady_used_color(const struct graph_adj *g, 
 				const struct node_ptr_array *node_color, int node)
 {
-     struct arc *current;
+     struct arc_array adjs;
      bool *color_used;
      int color;
      size_t alloc;
-
-     alloc = g->n_nodes*sizeof(bool)+1;
+     unsigned int i, nr;
+     
+     alloc = g->n_nodes*sizeof(bool);
      color_used = xmalloc(alloc);
      memset(color_used, false, alloc);
-     current = g->adj_list[node];
-     while (current != NULL) {
-	  color = get_color(node_color, current->to);
+     adjs = get_adjacent_list(g, node);
+     nr = adjs.nr;
+     for (i = 0; i < nr; i++) {
+	  color = get_color(node_color, adjs.data[i].to);
 	  assert(color < g->n_nodes);
-	  if (color != NOCOLOR) {
+	  if (color != NOCOLOR) 
 	       color_used[color] = true;
-	  }
-	  current = current->next;
      }
      return color_used;
 }
@@ -426,18 +426,19 @@ static bool *get_ady_used_color(const struct graph_adj *g,
 static void update_saturation_degree(const struct graph_adj *g, pqueue_t *pq, 
 				     int node, const struct node_ptr_array *node_color)
 {
-     int r;
-     int color;
-     struct arc *current;
-     
+     int r, color;
+     struct arc_array adjs;
+     unsigned int i, nr;
+
      color = get_color(node_color, node);
      assert(color != NOCOLOR);
-     current = g->adj_list[node];
-     while(current != NULL) {
-	  r = increase_key(g, pq, current->to, color);
+
+     adjs = get_adjacent_list(g, node);
+     nr = adjs.nr;
+     for (i = 0; i < nr; i++) {
+	  r = increase_key(g, pq, adjs.data[i].to, color);
 	  if (r == -1)
 	       fatal("Error in update saturation degree\n");
-	  current = current->next;
      }
 }
 
@@ -1043,7 +1044,7 @@ double semEP_solver(const struct matrix *lmatrix, const struct matrix *rmatrix,
 #ifdef PRGDEBUG
      print_graph_adj(&gc);
 #endif
-     printf("Graph to Coloring - Nodes: %d; Edges: %d\n", gc.n_nodes, gc.n_arcs/2);
+     printf("Graph to Coloring - Nodes: %d; Edges: %ld\n", gc.n_nodes, gc.n_arcs/2);
      ti = clock();
      if (gc.n_nodes != 0) {
 	  coloring(&gc, color_nodes, &partitions, lterms, rterms);
