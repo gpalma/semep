@@ -23,12 +23,17 @@ Conference (ISWC 2013). Italy. 2014. [(PDF)](http://ldc.usb.ve/~gpalma/papers/se
 * README.md: this file.
 * src: source code.
 * test: datasets to test semEP
-  * test/yamanishi: link prediction dataset proposed by Yamanishi [1].
+  * test/yamanishi: link prediction dataset proposed by Yamanishi et al. [1].
+  * test/pawels:   drug side-effect dataset proposed by Pauwels et al. [2].
 * VERSION: software version.
   
 [1] K. Bleakley and Y. Yamanishi.
 *Supervised prediction of drug-target interactions
 using bipartite local models*. Bioinformatics, 25(18):2397-2403, 2009.
+
+[2] E. Pauwels, V. Stoven, and Y. Yamanishi.
+*Predicting drug side-effect profiles: a chemical fragment-based approach*.
+BMC Bioinformatics, 12:169, 2011.
 
 ## 3. License
 
